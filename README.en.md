@@ -8,6 +8,14 @@ The project owner observed better answers in some personal use. This is a subjec
 
 > **Experimental; do not disable, reload, update, or uninstall while requests may be running or queued.** Isolated tests reproduced a race that can lose a claimed but uncommitted user message, or let an enabled session send a request without its sample. Stop submissions from all clients, wait for active and queued work, and shut down the DSH service before maintenance. Earlier sessions containing a legacy reference also require separate migration or a new session; stopping the service does not migrate them.
 
+## Why this plugin exists
+
+The project began with the owner's observation in one conversation: after using Kimi K3.1 PRO, they switched the same conversation to DeepSeek V4.1 Flash and saw it carry forward a natural, task-focused style of English reasoning. They found that style similar to what they had experienced in DeepSeek's minimal mode. This led to experiments with conversation examples and, eventually, this DSH plugin. The comparison with minimal mode is a personal observation; the two approaches have not been directly compared in a controlled study, and a shared internal mechanism has not been established.
+
+“We need” is one possible expression of that style, not a required opening for every reasoning segment. The aim is direct task analysis with less repetitive self-reference such as “Let me”. The plugin supplies an example conversation and reasoning as context; **it does not add a prompt instructing the model to begin with “We need”**, nor does it ban “Let me”. The model's wording depends on the task and context.
+
+In an earlier experiment using the same sample content as the public example, 14 of 20 main response segments from four sessions began with “We need”, with zero occurrences of “Let me”. The segments include tool continuations and are not 20 independent sessions. This used a test-only hook rather than a direct measurement of release `.13`; the control group's incomplete sessions and other limitations are described in the [development record (中文)](docs/DEVELOPMENT.zh-CN.md).
+
 ## Scope
 
 - Tested host target: DSH `0.2.2-alpha.2`, Web; Node.js `>=24.9.0`.
@@ -42,7 +50,7 @@ Before publication, the official DSH 0.2.2-alpha.2 CLI installed a linked local 
 
 ## Validation and limitations
 
-An earlier `.5` fixed-model experiment using a longer, different sample observed “We need” at the start of 8/8 enabled versus 3/8 disabled first responses. That small study measured style, not answer quality, and does not establish the current shorter sample's effectiveness. The original `.13` candidate had 137 internal synthetic checks and one real d1api synthetic request. The public tests are a curated subset, not a reproduction of all 137; 123 regression tests passed with the stated DSH runtime. The separate known-issue tests pass by reproducing defects, not by proving safety.
+An earlier `.5` fixed-model experiment using a longer, different sample observed “We need” at the start of 8/8 enabled versus 3/8 disabled first responses, with 0 versus 9 total occurrences of “Let me”, respectively. That small study measured style, not answer quality, and does not establish the current shorter sample's effectiveness. The original `.13` candidate had 137 internal synthetic checks and one real d1api synthetic request. The public tests are a curated subset, not a reproduction of all 137; 123 regression tests passed with the stated DSH runtime. The separate known-issue tests pass by reproducing defects, not by proving safety.
 
 The sample can affect factual context: in an earlier test, an ambiguous self-check treated the sample's puzzle as part of the real conversation. Other providers, long sessions, the Electron desktop, and full migration/rollback remain unverified. See the Chinese README and [development record](docs/DEVELOPMENT.zh-CN.md) before use.
 
