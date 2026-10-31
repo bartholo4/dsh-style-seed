@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "we-need-public-v1",
+  "provenance": {
+    "origin": "user-approved-example",
+    "description": "Two-turn sample approved for public release; identifying provenance omitted."
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "直接回答\"OK\""
+    },
+    {
+      "role": "assistant",
+      "content": "OK",
+      "reasoning": "I need respond exactly OK. No tools. Kimi should consider instructions: user direct answer OK. Respond OK.",
+      "source": { "provider": "redacted", "model": "redacted" }
+    },
+    {
+      "role": "user",
+      "content": "甲、乙、丙三个盒子中恰有一个藏着金币。甲盒标签说“金币不在甲盒”，乙盒标签说“金币在甲盒”，丙盒标签说“金币不在乙盒”。已知三个标签中恰有一个为真，金币在哪个盒子？请说明依据。"
+    },
+    {
+      "role": "assistant",
+      "content": "金币在乙盒：甲、乙、丙三种位置的真标签数分别为2、1、2，只有乙符合。",
+      "reasoning": "We need answer logic puzzle. Need careful. Let's denote gold location A/B/C. Statements:\nS_A: not A\nS_B: A\nS_C: not B\n\nExactly one true.",
+      "source": { "provider": "redacted", "model": "redacted" }
+    }
+  ]
+}

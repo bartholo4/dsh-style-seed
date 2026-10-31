@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+synthetic-*/
+.DS_Store
+Thumbs.db

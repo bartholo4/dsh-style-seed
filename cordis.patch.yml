@@ -1,0 +1,5 @@
+- insert:
+    - id: dsh-style-seed
+      name: dsh-style-seed
+      config:
+        enabled: false
