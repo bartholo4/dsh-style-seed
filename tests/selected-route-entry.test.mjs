@@ -87,7 +87,7 @@ const image = char => ({ type: 'image', attachment: imageRef(char) });
 const text = value => ({ type: 'text', text: value });
 const dataUrl = char => `data:image/png;base64,${imageData.get(`sha256:${char.repeat(64)}`).toString('base64')}`;
 const requests = [];
-let requestTool = false;
+let requestTool = false, requestPartial = false;
 globalThis.fetch = async (input, init) => {
   const url = String(input), spec = allowed[url];
   assert.ok(spec, 'fake fetch rejects every non-fixture URL');
@@ -96,6 +96,15 @@ globalThis.fetch = async (input, init) => {
   const body = JSON.parse(init.body);
   assert.equal(body.model, spec.model);
   requests.push({ url, body });
+  if (requestPartial) {
+    requestPartial = false;
+    const chunk = { id: 'synthetic-partial', object: 'chat.completion.chunk', created: 1, model: body.model,
+      choices: [{ index: 0, delta: { reasoning: 'synthetic-interrupted-reasoning' }, finish_reason: null }] };
+    return new Response(new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      init.signal.addEventListener('abort', () => controller.error(new DOMException('synthetic canceled', 'AbortError')), { once: true });
+    } }), { headers: { 'content-type': 'text/event-stream' } });
+  }
   if (url.endsWith('/messages')) {
     const tool = requestTool;
     requestTool = false;
@@ -305,6 +314,43 @@ test('selected-route entry with real AgentLoop and PiAiAdapter, entirely synthet
       assert.equal(requests.length - start, 3);
       assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
       assert.ok(requests.at(-1).body.messages.some(message => message.role === 'user' && message.content === 'synthetic-followup'));
+    });
+    await t.test('canceled native reasoning-only history retries with seed without legacy rewriting', async () => {
+      const agent = await create('synthetic-abort-retry', routes.a, true), start = requests.length;
+      const stop = agent.ctx.on('agent/assistant-stream', ({ frame }) => {
+        if (frame.type === 'chunk' && frame.chunk.type === 'reasoning-delta') agent.cancel({ kind: 'user' });
+      });
+      requestPartial = true;
+      agent.followup(user([text('synthetic-cancel-first')])); await agent.whenIdle(); stop();
+      assert.equal(lastTurn(agent)?.kind, 'aborted');
+      assert.deepEqual(seedCounts(requests.at(-1).body), fullSeed);
+      const partial = agent.session.snapshotEvents().findLast(event => event.type === 'assistant/message');
+      assert.equal(partial.data.interrupted, true);
+      assert.deepEqual(partial.data.message.content, [{ type: 'reasoning', text: 'synthetic-interrupted-reasoning' }]);
+      assert.equal(partial.data.message.source.replayState, undefined);
+      const durable = JSON.stringify(partial);
+      agent.followup(user([text('synthetic-retry-after-cancel')])); await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed', JSON.stringify(lastTurn(agent)));
+      assert.equal(requests.length, start + 2);
+      assert.deepEqual(seedCounts(requests.at(-1).body), fullSeed);
+      assert.equal(JSON.stringify(agent.session.snapshotEvents().find(event => event === partial)), durable);
+      assert.doesNotMatch(JSON.stringify(agent.session.snapshotEvents()), /synthetic-seed-user|synthetic-seed-reasoning/);
+      agent.followup(user([text('synthetic-after-success')])); await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed');
+      assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
+    });
+    await t.test('missing configured output cap reports configuration rather than a full context', async () => {
+      const agent = await create('synthetic-missing-output-cap', { ...routes.a, maxTokens: undefined }, true);
+      const start = requests.length;
+      agent.followup(user([text('synthetic-no-cap')])); await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'error');
+      assert.match(lastTurn(agent)?.error?.message ?? '', /maxTokens/);
+      assert.doesNotMatch(lastTurn(agent)?.error?.message ?? '', /上下文已满/);
+      assert.equal(requests.length, start);
+      assert.equal((await set(agent.id, false)).ok, true);
+      agent.followup(user([text('synthetic-off-no-cap')])); await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed');
+      assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
     });
     await t.test('new enabled session follows route B, its endpoint, synthetic key, model and controls', async () => {
       const agent = await create('synthetic-b-enabled', routes.b, true), start = requests.length;

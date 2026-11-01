@@ -16,13 +16,13 @@ const deferred = () => {
 
 function client(implementation, bridge, initial = {}) {
   const states = [], refs = [], effects = [], pending = [];
-  let cursor = 0, component;
+  let cursor = 0, component, mounted = true;
   let sessionId = initial.sessionId ?? 'synthetic-session';
   let snapshot = { blank: true, subagent: null, removed: false, openState: 'open', running: false, ...initial.snapshot };
   let selection = { provider: 'provider-a', model: 'model-a', reasoningEffort: 'high', ...initial.selection };
   const React = {
     useState(initialValue) { const i = cursor++; if (!(i in states)) states[i] = initialValue;
-      return [states[i], value => { states[i] = typeof value === 'function' ? value(states[i]) : value; }]; },
+      return [states[i], value => { assert.equal(mounted, true, 'no state updates after unmount'); states[i] = typeof value === 'function' ? value(states[i]) : value; }]; },
     useRef(initialValue) { const i = cursor++; return refs[i] ??= { current: initialValue }; },
     useEffect(fn, deps) { const i = cursor++; if (!effects[i] || deps.some((value, j) => value !== effects[i].deps[j]))
       pending.push(() => { effects[i]?.cleanup?.(); effects[i] = { deps, cleanup: fn() }; }); },
@@ -44,6 +44,10 @@ function client(implementation, bridge, initial = {}) {
     } } } });
   }
   return {
+    unmount() {
+      effects.forEach(effect => effect?.cleanup?.());
+      mounted = false;
+    },
     render(update = {}) {
       if (Object.hasOwn(update, 'sessionId')) sessionId = update.sessionId;
       snapshot = { ...snapshot, ...update.snapshot };
@@ -129,16 +133,82 @@ for (const implementation of ['source', 'bundle']) {
     request.reject(new Error('unknown outcome')); await Promise.all([first, duplicate]);
     // An old event handler must not resubmit even before React renders the error.
     await control.props.onClick();
-    const status = ui.render(); assert.equal(status.type, 'span'); assert.match(status.child, /状态未确认/);
-    assert.equal(status.props.onClick, undefined); assert.equal(writes, 1);
+    const status = ui.render(); assert.equal(status.type, 'button'); assert.match(status.props['aria-label'], /状态未确认/);
+    assert.match(status.child, /重试检查/); assert.equal(writes, 1);
   });
 
   test(`${implementation}: a failed or malformed read never displays a confirmed off state`, async () => {
     for (const get of [async () => { throw new Error('unavailable'); }, async () => ({ editable: true })]) {
       const ui = client(implementation, { get, set: async () => assert.fail('must not save') }, { snapshot: { blank: false } });
       ui.render(); await settle(); const status = ui.render();
-      assert.equal(status.type, 'span'); assert.match(status.child, /状态未确认/);
-      assert.equal(status.props.onClick, undefined);
+      assert.equal(status.type, 'button'); assert.match(status.props['aria-label'], /状态未确认/);
+      assert.match(status.child, /重试检查/);
+    }
+  });
+
+  test(`${implementation}: retry reconciles a committed but failed save without resending it`, async () => {
+    let enabled = false, reads = 0, writes = 0;
+    const ui = client(implementation, {
+      get: async () => { reads++; return { enabled, editable: true }; },
+      set: async (_id, next) => { writes++; enabled = next; throw new Error('reply lost after commit'); },
+    });
+    ui.render(); await settle(); await ui.render().props.onClick();
+    const retry = ui.render();
+    retry.props.onClick(); retry.props.onClick();
+    assert.match(ui.render().child, /检查中/); await settle();
+    assert.equal(ui.render().child, 'weneed开关：开');
+    assert.equal(reads, 2); assert.equal(writes, 1);
+    retry.props.onClick(); ui.render(); await settle();
+    assert.equal(reads, 2); assert.equal(writes, 1);
+  });
+
+  test(`${implementation}: failed reads can be retried repeatedly without any write`, async () => {
+    let reads = 0;
+    const ui = client(implementation, {
+      get: async () => { if (++reads < 3) throw new Error('offline'); return { enabled: false, editable: true }; },
+      set: async () => assert.fail('retry must never write'),
+    });
+    ui.render(); await settle();
+    for (let i = 0; i < 2; i++) {
+      ui.render().props.onClick(); assert.match(ui.render().child, /检查中/); await settle();
+    }
+    assert.equal(ui.render().child, 'weneed开关：关'); assert.equal(reads, 3);
+  });
+
+  test(`${implementation}: stale retry handlers and responses cannot affect a newer session`, async () => {
+    const pendingRead = deferred(); let reads = 0;
+    const ui = client(implementation, {
+      get: async id => {
+        reads++;
+        if (id === 'two') return { enabled: false, editable: true };
+        if (reads === 1) throw new Error('offline');
+        return pendingRead.promise;
+      }, set: async () => assert.fail('retry must never write'),
+    }, { sessionId: 'one' });
+    ui.render(); await settle(); const retry = ui.render();
+    retry.props.onClick(); ui.render();
+    ui.render({ sessionId: 'two' }); await settle();
+    retry.props.onClick(); ui.render();
+    pendingRead.resolve({ enabled: true, editable: true }); await settle();
+    assert.equal(ui.render().child, 'weneed开关：关'); assert.equal(reads, 3);
+  });
+
+  test(`${implementation}: retry completion and stale handler do nothing after unmount`, async () => {
+    for (const outcome of ['resolve', 'reject']) {
+      const request = deferred(); let reads = 0, writes = 0;
+      const ui = client(implementation, {
+        get: async () => { if (++reads === 1) throw new Error('offline'); return request.promise; },
+        set: async () => { writes++; assert.fail('retry must never write'); },
+      });
+      ui.render(); await settle(); const retry = ui.render();
+      retry.props.onClick(); ui.render();
+      assert.equal(reads, 2);
+      ui.unmount();
+      retry.props.onClick();
+      if (outcome === 'resolve') request.resolve({ enabled: true, editable: true });
+      else request.reject(new Error('still offline'));
+      await settle();
+      assert.equal(reads, 2); assert.equal(writes, 0);
     }
   });
 

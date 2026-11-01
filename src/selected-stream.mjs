@@ -92,6 +92,9 @@ export function installSelectedStream(ctx, {codec,store,registry,firstOnly,route
         template=validateSeed(loaded?.template,DEFAULTS.maxSeedBytes);
         if (loaded?.sha256!==admission.sha256 || fingerprintSeed(template)!==admission.sha256) throw new Error('weneed开关历史样例不可用');
         const context=prepared.context?.contextWindow;
+        if (context !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens <= 0)) {
+          throw new Error('weneed开关无法确认输出 token 上限；请在所选模型配置中设置 maxTokens 后重试，或关闭开关');
+        }
         if (context !== undefined && !withinEstimatedBudget(options,context,Buffer.byteLength(JSON.stringify(template),'utf8'))) {
           throw new Error('weneed开关的会话上下文已满');
         }
@@ -120,7 +123,10 @@ export function installSelectedStream(ctx, {codec,store,registry,firstOnly,route
         return includeSeed ? seedMessages(template,route,field,held.api) : [];
       });
       if (held?.api==='openai-completions') {
-        projected=restoreLegacyReasoning(projected,route,field);
+        // New sidecar sessions contain native host history, including canceled
+        // reasoning-only partials. Do not mistake those for .12 imports or
+        // invent successful replay metadata for an interrupted response.
+        if (!sidecarOnly) projected=restoreLegacyReasoning(projected,route,field);
         if (admission.state!=='disabled') projected=preserveToolImages(projected);
       }
       cancel(options.signal);

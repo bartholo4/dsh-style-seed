@@ -9,12 +9,13 @@ export default class SwitchContractService extends TypertRemoteService {
   static inject = ['typert', 'remoteAccess', 'sessions', 'agents'];
   constructor(ctx, config = {}) {
     super(ctx, 'switchContract', { namespace: 'dsh-style-seed-switch' });
+    this.canEdit = config.canEdit ?? (() => true);
     this.isManaged = config.isManaged ?? (() => false);
     this.admissionStore = config.admissionStore;
     this.followSelected = config.followSelected === true;
     this.contract = this.followSelected
       ? createGenericSwitchContract({sessions:ctx.sessions,agents:ctx.agents,store:this.admissionStore,
-          defaultSelection:config.defaultSelection, isManaged:this.isManaged})
+          defaultSelection:config.defaultSelection, isManaged:this.isManaged, canEdit:this.canEdit})
       : createSwitchContract({ sessions: ctx.sessions, agents: ctx.agents,
           expected: config.expected ?? {}, authority: config.authority,
           defaultSelection: config.defaultSelection ?? (() => undefined), currentRoute: config.currentRoute });
@@ -38,7 +39,7 @@ export default class SwitchContractService extends TypertRemoteService {
     if (!isEligibleTopLevel(agent)) return { ...view, editable: false, enabled: false, admission: null };
     const record = this.admissionStore?.get(sessionId);
     if (record && record.owner !== sessionId) throw new Error('history switch status unavailable');
-    const managed = this.isManaged(agent);
+    const managed = this.canEdit() === true && this.isManaged(agent);
     // A canceled first attempt can leave pending/skipped metadata even though
     // the blank switch was subsequently turned off or the process restarted.
     const visibleRecord = view.editable && !view.enabled && record?.state !== 'active' ? undefined : record;
@@ -49,7 +50,7 @@ export default class SwitchContractService extends TypertRemoteService {
   async set(sessionId, enabled) {
     if (this.followSelected) return this.contract.set(sessionId, enabled);
     const agent = this.ctx.agents.get(sessionId);
-    if (!isEligibleTopLevel(agent) || !this.isManaged(agent)) throw new Error('open a new session to use history switch');
+    if (this.canEdit() !== true || !isEligibleTopLevel(agent) || !this.isManaged(agent)) throw new Error('open a new session to use history switch');
     return this.contract.set(sessionId, enabled);
   }
 }

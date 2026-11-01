@@ -6,7 +6,7 @@ An experimental per-session switch for the [DeepSeek Harness](https://github.com
 
 The project owner observed better answers in some personal use. This is a subjective observation, not a controlled finding: the plugin does not guarantee a particular phrase, higher answer quality, stronger capability, or lower cost.
 
-> **Experimental; do not disable, reload, update, or uninstall while requests may be running or queued.** Isolated tests reproduced a race that can lose a claimed but uncommitted user message, or let an enabled session send a request without its sample. Stop submissions from all clients, wait for active and queued work, and shut down the DSH service before maintenance. Earlier sessions containing a legacy reference also require separate migration or a new session; stopping the service does not migrate them.
+> **Experimental; do not disable, reload, update, or uninstall while requests may be running or queued.** Release `.14` fixes the reproduced loss of accepted input during route-resolution teardown. A remaining race can still let an enabled session send a request without its sample if input arrives after the final idle snapshot. Stop submissions from all clients, wait for active and queued work, and shut down the DSH service before maintenance. Earlier sessions containing a legacy reference also require separate migration or a new session; stopping the service does not migrate them.
 
 ## Why this plugin exists
 
@@ -21,7 +21,7 @@ In an earlier experiment using the same sample content as the public example, 14
 - Tested host target: DSH `0.2.2-alpha.2`, Web; Node.js `>=24.9.0`.
 - The switch is off by default. Enable it before the first message; once a started session has been turned off, start a new session to turn it on again.
 - The sample is included in first-turn requests and necessary tool continuations until the first successful reply. It is not inserted into the new session's event history. The first actual answer can still carry sample influence into later turns.
-- OpenAI Chat Completions and the official DSH DeepSeek Messages mapping are implemented. Other protocols may be rejected. Image and tool handling have synthetic coverage; one d1api configuration has a single real-network test. Other providers and daily Electron desktop use have not been validated.
+- OpenAI Chat Completions and the official DSH DeepSeek Messages mapping are implemented. Other protocols may be rejected. Image and tool handling have synthetic coverage; one d1api configuration has limited live smoke coverage, detailed in the [current validation report](docs/VALIDATION-2026-11-01.md). Other providers and daily Electron desktop use have not been validated.
 - The provided [example](examples/we-need-seed.json) was approved for publication. Its source metadata is redacted. The example is sent to the selected model service when the switch is enabled.
 
 ## Install for isolated testing
@@ -50,10 +50,31 @@ Before publication, the official DSH 0.2.2-alpha.2 CLI installed a linked local 
 
 ## Validation and limitations
 
-An earlier `.5` fixed-model experiment using a longer, different sample observed “We need” at the start of 8/8 enabled versus 3/8 disabled first responses, with 0 versus 9 total occurrences of “Let me”, respectively. That small study measured style, not answer quality, and does not establish the current shorter sample's effectiveness. The original `.13` candidate had 137 internal synthetic checks and one real d1api synthetic request. The public tests are a curated subset, not a reproduction of all 137; 123 regression tests passed with the stated DSH runtime. The separate known-issue tests pass by reproducing defects, not by proving safety.
+An earlier `.5` fixed-model experiment using a longer, different sample observed “We need” at the start of 8/8 enabled versus 3/8 disabled first responses, with 0 versus 9 total occurrences of “Let me”, respectively. That small study measured style, not answer quality, and does not establish the current shorter sample's effectiveness. The original `.13` candidate had 137 internal synthetic checks and one real d1api synthetic request. The public tests are a curated subset, not a reproduction of all 137; 123 regression tests passed with the stated DSH runtime. Those are historical counts, not the current release gate. Lifecycle coverage now includes positive accepted-input drain regressions and explicitly labeled remaining boundary characterizations, not proof of safe hot unload.
 
 The sample can affect factual context: in an earlier test, an ambiguous self-check treated the sample's puzzle as part of the real conversation. Other providers, long sessions, the Electron desktop, and full migration/rollback remain unverified. See the Chinese README and [development record](docs/DEVELOPMENT.zh-CN.md) before use.
 
 ## License
 
 The code and example dialogue/reasoning excerpts approved for publication by their provider are offered under the [MIT license](LICENSE); identifying provenance is omitted. Dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## Reproducible development checks
+
+```bash
+# Install the official pinned DSH into a separate disposable directory.
+npm install --prefix /tmp/dsh-test-runtime @deepseek-ai/dsh@0.2.2-alpha.2
+export DSH_RUNTIME_NODE_MODULES=/tmp/dsh-test-runtime/node_modules
+npm run check
+```
+
+The `.14` cloud check on Node `24.22.1` with installed DSH `0.2.2-alpha.2` passed **142 tests, zero skips**. This includes actual host services and gateway RPC with synthetic model responses, plus deterministic client component/source-bundle fixtures; the automated suite itself is not a real-browser or paid-model evaluation. Separately, the actual cloud Web UI was tested against a loopback mock provider: default OFF, first successful seeded reply, unseeded later reply, safe unknown-tool continuation, error/retry, Stop/cancel/retry, and OFF recovery passed. The canceled-first-reply scenario was rerun after the fix, with seed present on retry and absent after success. Seven disposable persisted sessions (197 records) contained none of the exact seed message/reasoning strings. These are real UI/protocol checks with mock responses, not model effectiveness evidence.
+
+`npm test` requires the supported installed host and fails on skipped tests. `npm run test:portable` explicitly runs limited coverage without host integration; it is not the release gate. `npm run test:lifecycle` isolates lifecycle tests (set the same runtime variable). Tests use synthetic data and blocked model-network access. `npm run build:client` regenerates the dependency-free client bundle; `check:client` verifies it matches source. There is no separate TypeScript or lint toolchain in this JavaScript-only repository.
+
+The `.14` switch shows an explicit status retry after an RPC failure. Retry only reads server state: it never resends an uncertain write. Session and generation guards discard stale responses.
+
+For enabled requests with a known context window, the plugin requires a concrete output-token cap to reserve its conservative budget. With the official pi-ai adapter, set `models[].maxTokens` (for example, `2048` in an isolated test profile); provider-level `defaultMaxTokens` alone does not necessarily supply a concrete host request cap. Missing caps now produce an actionable configuration error; the plugin does not silently override the selected model controls.
+
+## Limited live Web validation
+
+On 2026-11-01, the actual cloud Web UI completed three small OFF/ON pairs on d1api `deepseek-v4.1-flash` with max reasoning: arithmetic, scheduling, and strict JSON. All six outputs met their tested requirements. “We need” appeared in 1/3 OFF and 3/3 ON openings; it can occur naturally when OFF and is not guaranteed when ON. Output-token changes were mixed, and cache/timing differences prevent efficiency or speed conclusions. This does not demonstrate improved intelligence or answer quality. The first OFF call's QA-guard terminal ambiguity is preserved; calls 2–6 had clean terminal records. The temporary live-test credential storage and runtime data were removed after validation. See the [scoped results and limitations](docs/VALIDATION-2026-11-01.md).

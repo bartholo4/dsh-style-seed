@@ -72,11 +72,29 @@ function registerSessionSlot(ctx, React, bridge) {
       }
     }
 
-    if (view.pending || saving || unknown || view.savedOnly) {
-      const text = saving ? '保存中' : view.pending ? '检查中' : unknown ? '状态未确认' :
+    function retryRead() {
+      // Read only: a rejected save may already have committed on the server.
+      // Invalidate this handler synchronously to coalesce rapid clicks and
+      // prevent old-session callbacks from refreshing a newer control.
+      if (!unknown || view.pending || saving || generation.current !== renderedGeneration ||
+          current.current?.key !== key || writing.current.has(sessionId)) return;
+      generation.current++;
+      setState({ key, pending: true });
+      setRefresh(value => value + 1);
+    }
+
+    if (unknown && !view.pending && !saving) {
+      return React.createElement('button', { type: 'button', onClick: retryRead,
+        'aria-label': 'weneed开关状态未确认，重新检查',
+        style: { ...compactStyle, cursor: 'pointer' },
+        title: '状态未确认。点击仅重新读取当前状态，不会重复保存或更改开关。' },
+      'weneed：重试检查');
+    }
+
+    if (view.pending || saving || view.savedOnly) {
+      const text = saving ? '保存中' : view.pending ? '检查中' :
         `${view.enabled ? '开' : '关'}（未确认）`;
       const title = saving ? '正在保存，完成前不能再次操作。' : view.pending ? '正在检查当前会话的开关状态。' :
-        unknown ? '开关状态未确认，请重新打开会话后再检查。' :
         `已保存为${view.enabled ? '开' : '关'}；当前状态尚未确认，发送时仍需校验。`;
       return React.createElement('span', { role: 'status', style: compactStyle, title }, `weneed开关：${text}`);
     }
