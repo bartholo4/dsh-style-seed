@@ -21,7 +21,7 @@ In an earlier experiment using the same sample content as the public example, 14
 - Tested host target: DSH `0.2.2-alpha.2`, Web; Node.js `>=24.9.0`.
 - The switch is off by default. Enable it before the first message; once a started session has been turned off, start a new session to turn it on again.
 - The sample is included in first-turn requests and necessary tool continuations until the first successful reply. It is not inserted into the new session's event history. The first actual answer can still carry sample influence into later turns.
-- OpenAI Chat Completions and the official DSH DeepSeek Messages mapping are implemented. Other protocols may be rejected. Image and tool handling have synthetic coverage; one d1api configuration has a single real-network test. Other providers and daily Electron desktop use have not been validated.
+- OpenAI Chat Completions and the official DSH DeepSeek Messages mapping are implemented. Other protocols may be rejected. Image and tool handling have synthetic coverage; one d1api configuration has limited live smoke coverage, detailed in the [current validation report](docs/VALIDATION-2026-11-01.md). Other providers and daily Electron desktop use have not been validated.
 - The provided [example](examples/we-need-seed.json) was approved for publication. Its source metadata is redacted. The example is sent to the selected model service when the switch is enabled.
 
 ## Install for isolated testing
@@ -74,3 +74,7 @@ The `.14` cloud check on Node `24.22.1` with installed DSH `0.2.2-alpha.2` passe
 The `.14` switch shows an explicit status retry after an RPC failure. Retry only reads server state: it never resends an uncertain write. Session and generation guards discard stale responses.
 
 For enabled requests with a known context window, the plugin requires a concrete output-token cap to reserve its conservative budget. With the official pi-ai adapter, set `models[].maxTokens` (for example, `2048` in an isolated test profile); provider-level `defaultMaxTokens` alone does not necessarily supply a concrete host request cap. Missing caps now produce an actionable configuration error; the plugin does not silently override the selected model controls.
+
+## Limited live Web validation
+
+On 2026-11-01, the actual cloud Web UI completed three small OFF/ON pairs on d1api `deepseek-v4.1-flash` with max reasoning: arithmetic, scheduling, and strict JSON. All six outputs met their tested requirements. “We need” appeared in 1/3 OFF and 3/3 ON openings; it can occur naturally when OFF and is not guaranteed when ON. Output-token changes were mixed, and cache/timing differences prevent efficiency or speed conclusions. This does not demonstrate improved intelligence or answer quality. The first OFF call's QA-guard terminal ambiguity is preserved; calls 2–6 had clean terminal records. The temporary live-test credential storage and runtime data were removed after validation. See the [scoped results and limitations](docs/VALIDATION-2026-11-01.md).
