@@ -1,6 +1,6 @@
 {
   "name": "dsh-style-seed",
-  "version": "0.2.0-experimental.13",
+  "version": "0.2.0-experimental.14",
   "private": true,
   "description": "Experimental per-session weneed switch for DeepSeek Harness",
   "repository": {
@@ -14,9 +14,11 @@
   "license": "MIT",
   "scripts": {
     "test": "node scripts/run-tests.mjs",
-    "test:known-issue": "node --test --test-reporter=tap tests/lifecycle-disposal.test.mjs",
     "build:client": "node scripts/build-client.mjs",
-    "check:client": "node scripts/build-client.mjs --check"
+    "check:client": "node scripts/build-client.mjs --check",
+    "test:portable": "node scripts/run-tests.mjs --portable",
+    "check": "npm run check:client && npm test",
+    "test:lifecycle": "node --test --test-reporter=tap tests/lifecycle.test.mjs"
   },
   "engines": {
     "node": ">=24.9.0",

@@ -1,0 +1,20 @@
+name: Plugin validation
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  full-host-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Install the supported isolated DSH host
+        run: npm install --prefix "$RUNNER_TEMP/dsh-runtime" --no-audit --no-fund @deepseek-ai/dsh@0.2.2-alpha.2
+      - name: Check generated client and full regression suite (no model requests)
+        run: npm run check
+        env:
+          DSH_RUNTIME_NODE_MODULES: ${{ runner.temp }}/dsh-runtime/node_modules

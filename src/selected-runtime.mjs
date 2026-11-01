@@ -24,7 +24,8 @@ export async function applySelectedRuntime(ctx,config,gate) {
     stopSettings=ctx.on('settings/document-updated',()=>{topology.settingsRevision++;});
     hostFiber=await ctx.plugin(SwitchContractService,{followSelected:true,admissionStore:store,
       defaultSelection:()=>ctx.agentDefaultModel.currentSelection(),
-      isManaged:agent=>!gate.closing && listeners.get(agent?.id)?.agent===agent});
+      canEdit:()=>!gate.closing,
+      isManaged:agent=>listeners.get(agent?.id)?.agent===agent});
     const contract=ctx.get('switchContract')?.contract;
     if (!contract) throw new Error('history switch service unavailable');
     const stopStream=installSelectedStream(ctx,{codec,store,registry,firstOnly,routeByAgent,topology});

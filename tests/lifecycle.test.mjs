@@ -1,4 +1,4 @@
-// KNOWN DEFECT CHARACTERIZATION: passing asserts reproduce unsafe .13 behavior.
+// Positive drain regression plus explicitly labeled remaining unsafe boundaries.
 // This is not evidence that unload/reload is safe. The fixture uses alpha.2
 // host code, in-memory synthetic data and a network-blocked fake fetch.
 // Run with DSH_RUNTIME_NODE_MODULES pointing at the alpha.2 runtime.
@@ -43,7 +43,7 @@ syncBuiltinESMExports();
 
 const runtime = process.env.DSH_RUNTIME_NODE_MODULES;
 if (!runtime) {
-  test('known lifecycle defect characterization', { skip: 'Set DSH_RUNTIME_NODE_MODULES to the alpha.2 runtime node_modules' }, () => {});
+  test('host lifecycle regression and boundaries', { skip: 'Set DSH_RUNTIME_NODE_MODULES to the alpha.2 runtime node_modules' }, () => {});
 } else {
 const require = createRequire(join(runtime, '__synthetic_selected_entry.cjs'));
 for (const name of ['dsh-agent', 'dsh-agent-loop', 'dsh-llm', 'dsh-llm-pi-ai']) {
@@ -273,8 +273,9 @@ test('disposal race with actual alpha.2 host services and in-memory synthetic fi
       promise.then(() => clearTimeout(timer), () => clearTimeout(timer));
     })]);
     let interruptedAgent;
-    await t.test('characterizes .13: teardown during route resolution can lose claimed input', async () => {
+    await t.test('drains accepted input with its seed during teardown route resolution', async () => {
       const agent = await create('synthetic-dispose-preparing', routes.a, true);
+      const untouched = await create('synthetic-drain-admission', routes.a, false);
       interruptedAgent = agent;
       const reached = Promise.withResolvers(), resume = Promise.withResolvers();
       stops.push(agent.ctx.on('agent/request', async (_payload, next) => {
@@ -291,9 +292,11 @@ test('disposal race with actual alpha.2 host services and in-memory synthetic fi
         let closing = false;
         for (let i = 0; i < 100; i++) {
           await Promise.resolve();
-          if (ctx.get('switchContract')?.contract.get(agent.id).editable === false) { closing = true; break; }
+          if (ctx.get('switchContract')?.contract.get(untouched.id).editable === false) { closing = true; break; }
         }
         assert.equal(closing, true, 'the plugin has entered its closing gate');
+        assert.equal((await set(untouched.id, true)).ok, false, 'no new switch admission during drain');
+        assert.equal((await get(untouched.id)).value.enabled, false);
       } finally { resume.resolve(); }
       await deadline(disposing, 'plugin disposal');
       await deadline(agent.whenIdle(), 'agent idle');
@@ -301,14 +304,17 @@ test('disposal race with actual alpha.2 host services and in-memory synthetic fi
       const committed = events.filter(event => event.type === 'user/message' &&
         event.data.content?.some(block => block.type === 'text' && block.text === 'synthetic-claimed-input'));
       const reason = lastTurn(agent)?.kind;
-      console.log('CHARACTERIZATION route preparation', JSON.stringify({ committed: committed.length, requests: requests.length - baseline, reason }));
-      assert.equal(committed.length, 0, 'current behavior removes the claimed input before commit');
-      assert.equal(requests.length, baseline, 'current behavior ends without a model request');
-      assert.notEqual(reason, 'completed');
+      console.log('REGRESSION route preparation', JSON.stringify({ committed: committed.length, requests: requests.length - baseline, reason }));
+      assert.equal(committed.length, 1, 'accepted input must be committed exactly once');
+      assert.equal(requests.length, baseline + 1);
+      assert.deepEqual(seedCounts(requests.at(-1).body), fullSeed);
+      assert.equal(reason, 'completed');
+      assert.equal(JSON.stringify(events).includes('synthetic-seed-user'), false);
+      assert.equal(JSON.stringify(events).includes('synthetic-seed-reasoning'), false);
     });
-    await t.test('characterizes .13: an unseeded first reply during an outage remains unseeded after reloading', async () => {
+    await t.test('completed first reply stays unseeded after plugin removal and reload', async () => {
       const pending = ctx.get('storageDomain').domains.get('style_seed_admission_v2').get(interruptedAgent.id);
-      assert.equal(pending?.state, 'pending');
+      assert.equal(pending?.state, 'active');
       assert.equal(pending?.mode, 'sidecar-only');
       const beforeOffline = requests.length;
       interruptedAgent.followup(user([text('synthetic-first-without-plugin')]));
@@ -327,10 +333,10 @@ test('disposal race with actual alpha.2 host services and in-memory synthetic fi
       assert.equal(requests.length, beforeResume + 1);
       assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
       assert.equal(lastTurn(interruptedAgent)?.kind, 'completed');
-      console.log('CHARACTERIZATION offline completed turn', JSON.stringify({ restoredEnabled: restored.value.enabled,
+      console.log('REGRESSION completed turn', JSON.stringify({ restoredEnabled: restored.value.enabled,
         offlineSeed: seedCounts(requests[beforeOffline].body), resumedSeed: seedCounts(requests.at(-1).body) }));
     });
-    await t.test('characterizes .13: enqueue after final idle snapshot can silently omit the seed', async () => {
+    await t.test('KNOWN BOUNDARY: enqueue after final idle snapshot can silently omit the seed', async () => {
       const agent = await create('synthetic-dispose-window', routes.a, true);
       const originalList = ctx.agents.list.bind(ctx.agents);
       let idleSnapshots = 0, inserted = false;
@@ -358,7 +364,7 @@ test('disposal race with actual alpha.2 host services and in-memory synthetic fi
       assert.deepEqual(seedCounts(actual[0].body), noSeed, 'current behavior routes without the requested seed');
       assert.equal(lastTurn(agent)?.kind, 'completed');
     });
-    await t.test('characterizes legacy marker after an offline plugin removal', async () => {
+    await t.test('KNOWN BOUNDARY: legacy marker after an offline plugin removal', async () => {
       const { createReferenceCodec } = await import('../src/reference.mjs');
       const id = 'synthetic-legacy-after-removal';
       const selection = { current: routes.a, assembled: undefined };

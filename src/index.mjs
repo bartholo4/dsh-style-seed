@@ -82,7 +82,8 @@ async function applyRuntime(ctx, config, gate) {
       expected, authority,
       defaultSelection: () => ctx.agentDefaultModel.currentSelection(),
       currentRoute: agent => selectionByAgent.get(agent)?.currentRoute(),
-      isManaged: agent => !gate.closing && listeners.get(agent?.id)?.agent === agent,
+      canEdit: () => !gate.closing,
+      isManaged: agent => listeners.get(agent?.id)?.agent === agent,
       admissionStore,
     });
     const contract = ctx.get('switchContract')?.contract;
@@ -153,6 +154,10 @@ export async function apply(ctx, config) {
     yield child.dispose;
     yield async () => {
       gate.closing = true;
+      // Freeze switch edits, not ownership: accepted requests and queued
+      // input retain their interceptors and seed while the host drains.
+      // This is NOT an atomic host admission barrier. Stop all submissions
+      // and shut down the service before maintenance.
       // Drain queued input rather than throwing after the AgentLoop has
       // already claimed it. A final multi-agent admission race remains open;
       // this development candidate must not be installed into daily use.

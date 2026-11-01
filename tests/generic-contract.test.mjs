@@ -236,3 +236,32 @@ test('saved-only status validates owner and never exposes storage errors', async
   assert.throws(() => c.get(h.id), { message: 'history switch status unavailable' });
   await c.close();
 });
+
+test('drain gate freezes new switch edits without invalidating accepted route ownership', async () => {
+  const h = host(), route = later();
+  let draining = false;
+  const c = createGenericSwitchContract({ ...h.dependencies, canEdit: () => !draining });
+  await c.set(h.id, true);
+  const accepted = c.request(h.agent, {}, () => route.promise, true);
+  await Promise.resolve();
+  draining = true;
+  assert.equal(c.get(h.id).enabled, true);
+  assert.equal(c.get(h.id).editable, false);
+  await assert.rejects(c.set(h.id, false), /not editable/);
+  route.resolve({ provider: 'synthetic', model: 'synthetic' });
+  assert.equal((await accepted).ready, true);
+  // AgentLoop may already have queued work that enters pre-step after draining.
+  await c.waitPending(h.agent);
+  assert.equal((await c.request(h.agent, {}, async () => ({}), true)).ready, true);
+  await c.close();
+  await assert.rejects(c.request(h.agent, {}, async () => ({})), /unavailable/);
+});
+
+test('drain gate rejects enabling a previously off session', async () => {
+  const h = host();
+  const c = createGenericSwitchContract({ ...h.dependencies, canEdit: () => false });
+  assert.equal(c.get(h.id).enabled, false);
+  assert.equal(c.get(h.id).editable, false);
+  await assert.rejects(c.set(h.id, true), /not editable/);
+  await c.close();
+});

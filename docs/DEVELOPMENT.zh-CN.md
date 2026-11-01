@@ -62,3 +62,14 @@ Web 试用曾因插件拒绝工具返回的图片而报错。后续加入用户�
 - [DSH 0.2.2-alpha.2：插件打包](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-alpha.2/docs/user/develop/basic/publish.md)
 - [DSH 0.2.2-alpha.2：CLI 与插件管理](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-alpha.2/apps/cli/reference/README.md)
 - [dsh-think-any-lang](https://github.com/lco117/dsh-think-any-lang) 与 [DSH-Think-zh](https://github.com/Len7183/DSH-Think-zh)：思考语言相关插件；它们主要通过提示词控制语言，不等同于本项目的样例注入方法。
+
+
+## `.14` 云端优化
+
+在独立安装的官方 DSH `0.2.2-alpha.2` 和 Node `24.22.1` 上，以合成内存会话、真实宿主服务和禁止模型网络的替身测试修复路由准备时的排空：已接收消息恰好提交一次，请求恰好发送一次并含样例，样例正文和思考没有写入新会话事件。关闭阶段只禁止新的开关编辑，不把仍在排空的代理误判为失去所有权。
+
+客户端增加显式只读状态重试，不自动重发结果不确定的 set；覆盖重复失败、重复点击、切换会话和旧响应。完整测试现在要求固定宿主版本且零跳过，可移植测试单列，不再把缺宿主的部分绿色结果当作完整通过。
+
+仍复现最终空闲快照后入队导致样例遗漏，以及卸载后旧引用成为普通文本的边界；没有宣称热卸载安全。验证没有调用付费模型、读取真实凭据或改动用户桌面；没有新增答案质量／能力提升证据。
+
+最终 `npm run check`：140 项通过、0 失败、0 跳过；客户端产物一致性、所有 JavaScript 语法及 diff 空白检查通过。没有独立 lint／TypeScript 工具链；没有进行真实浏览器端到端测试。

@@ -24,6 +24,7 @@ test('cold status is saved-only, validates ownership, and never relaxes set',
       host.contract = { get: () => ({ ...view }), set: () => { setCalls++; return { ...view }; } };
       host.admissionStore = { get: () => record };
       host.isManaged = () => managed;
+      host.canEdit = () => true;
 
       let result = host.get(id);
       assert.equal(result.savedOnly, true); assert.equal(result.admission, 'active');
@@ -60,5 +61,9 @@ test('cold status is saved-only, validates ownership, and never relaxes set',
       // Ordinary live editable state continues to delegate to the existing contract.
       record = undefined; managed = true; view = { ...view, editable: true };
       await host.set(id, true); assert.equal(setCalls, 1);
+      host.canEdit = () => false;
+      assert.equal(host.get(id).editable, false);
+      await assert.rejects(host.set(id, true), /open a new session/);
+      assert.equal(setCalls, 1);
     } finally { hook.deregister(); }
   });

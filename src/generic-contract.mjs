@@ -34,10 +34,10 @@ function waitWithSignal(promise, signal) {
 }
 
 /** Session admission state only; bindingVerified does not verify a provider route. */
-export function createGenericSwitchContract({ sessions, agents, store, defaultSelection, isManaged = () => false }) {
+export function createGenericSwitchContract({ sessions, agents, store, defaultSelection, isManaged = () => false, canEdit = () => true }) {
   if (typeof sessions?.get !== 'function' || typeof agents?.get !== 'function' ||
       typeof store?.get !== 'function' || typeof store?.disable !== 'function' ||
-      typeof store?.abandonPending !== 'function' || typeof isManaged !== 'function') {
+      typeof store?.abandonPending !== 'function' || typeof isManaged !== 'function' || typeof canEdit !== 'function') {
     throw new TypeError('history switch dependencies unavailable');
   }
   // Support is deliberately unknown and no route/default selection is inferred.
@@ -105,7 +105,7 @@ export function createGenericSwitchContract({ sessions, agents, store, defaultSe
     const blank = !events.some(event => startedEvents.has(event?.type));
     if (!record && entry?.enabled && events.some(event => inputEvents.has(event?.type))) throw unavailable();
     const enabled = enabledFor(entry, record, blank);
-    const editable = managed(agent) && agent.status === 'idle' && !(entry?.calls || entry?.routes.size) &&
+    const editable = canEdit() === true && managed(agent) && agent.status === 'idle' && !(entry?.calls || entry?.routes.size) &&
       (blank ? record?.state !== 'disabled' : enabled);
     return { editable, enabled, support: 'unknown', admission: record?.state ?? null };
   }
