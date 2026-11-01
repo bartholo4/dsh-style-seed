@@ -3,6 +3,8 @@
 ## 0.2.0-experimental.14
 
 - Separate switch-edit admission from live agent ownership during drain, preserving accepted input and seeded requests through route resolution.
+- Preserve native interrupted reasoning-only history in sidecar sessions so canceled first replies can be retried without the legacy-import guard rejecting them.
+- Explain missing model output-token caps as a configuration issue instead of incorrectly reporting a full context.
 - Add explicit read-only client RPC retry; never replay an uncertain switch write and reject stale session responses.
 - Require pinned installed DSH for the full test gate, fail on skips, and provide an explicitly limited portable suite plus pinned-host CI.
 - Convert the fixed teardown defect into a positive host regression and retain labeled late-enqueue/legacy-removal boundary tests.
