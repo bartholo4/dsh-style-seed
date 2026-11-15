@@ -12,7 +12,7 @@ import https from 'node:https';
 
 const runtime = process.env.DSH_RUNTIME_NODE_MODULES;
 if (!runtime) {
-  test('selected route uses the DSH host', { skip: 'Set DSH_RUNTIME_NODE_MODULES to the DSH 0.2.2-alpha.2 node_modules directory' }, () => {});
+  test('selected route uses the DSH host', { skip: 'Set DSH_RUNTIME_NODE_MODULES to a supported DSH node_modules directory' }, () => {});
 } else {
 // Entire fixture is synthetic and held in memory. No real network fallback,
 // session file, credential store, attachment, or seed file is consulted.
@@ -44,7 +44,7 @@ syncBuiltinESMExports();
 
 
 const require = createRequire(join(runtime, '__synthetic_selected_entry.cjs'));
-assert.equal(require('@deepseek-ai/dsh-llm-pi-ai/package.json').version, '0.2.2-alpha.2');
+assert.ok(['0.2.2-alpha.2', '0.2.2-rc.3'].includes(require('@deepseek-ai/dsh-llm-pi-ai/package.json').version));
 const names = ['@deepseek-ai/cordis', '@deepseek-ai/schemastery', '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-agent-loop',
   '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-llm-pi-ai', '@deepseek-ai/dsh-llm-deepseek', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-session',
   '@deepseek-ai/dsh-session-projection', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-tool-executor-native',
@@ -64,7 +64,10 @@ const routes = {
 const profiles = {
   deepseek: { baseURL: 'https://catalog.synthetic.invalid/v1', apiKeyEnv: 'SYNTHETIC_CATALOG', models: [{ id: 'deepseek-flash' }] },
   'synthetic-a': { api: 'openai-completions', baseURL: 'https://alpha.synthetic.invalid/v1', apiKeyEnv: 'SYNTHETIC_A',
-    defaultInput: ['text', 'image'], models: [{ id: 'model-a', reasoningEfforts: { high: 'high', max: 'max' } }],
+    defaultInput: ['text', 'image'], models: [
+      { id: 'model-a', reasoningEfforts: { high: 'high', max: 'max' } },
+      { id: 'model-a-128k', contextWindow: 131072, maxTokens: 131072, reasoningEfforts: { high: 'high', max: 'max' } },
+    ],
     compat: { thinkingFormat: 'deepseek', maxTokensField: 'max_completion_tokens' } },
   'synthetic-b': { api: 'openai-completions', baseURL: 'https://beta.synthetic.invalid/custom/v1', apiKeyEnv: 'SYNTHETIC_B',
     defaultInput: ['text', 'image'], models: [{ id: 'model-b', reasoningEfforts: { high: 'high', max: 'max' } }],
@@ -73,7 +76,7 @@ const profiles = {
     defaultInput: ['text'], models: [{ id: 'model-c' }] },
 };
 const allowed = {
-  'https://alpha.synthetic.invalid/v1/chat/completions': { auth: 'Bearer synthetic-key-a', model: 'model-a' },
+  'https://alpha.synthetic.invalid/v1/chat/completions': { auth: 'Bearer synthetic-key-a', models: ['model-a', 'model-a-128k'] },
   'https://beta.synthetic.invalid/custom/v1/chat/completions': { auth: 'Bearer synthetic-key-b', model: 'model-b' },
   'https://gamma.synthetic.invalid/v1/responses': { auth: 'Bearer synthetic-key-c', model: 'model-c' },
   'https://deepseek.synthetic.invalid/v1/messages': { auth: 'Bearer synthetic-key-d', model: 'messages-model' },
@@ -94,7 +97,7 @@ globalThis.fetch = async (input, init) => {
   assert.equal(init.method, 'POST');
   assert.equal(new Headers(init.headers).get('authorization'), spec.auth);
   const body = JSON.parse(init.body);
-  assert.equal(body.model, spec.model);
+  assert.ok(spec.models ? spec.models.includes(body.model) : body.model === spec.model);
   requests.push({ url, body });
   if (requestPartial) {
     requestPartial = false;
@@ -445,6 +448,22 @@ test('selected-route entry with real AgentLoop and PiAiAdapter, entirely synthet
       assert.equal(req.body.reasoning_effort, 'max');
       const sample = req.body.messages.find(message => message.role === 'assistant' && message.content === 'synthetic-seed-answer');
       assert.equal(sample.reasoning_content, 'synthetic-seed-reasoning');
+    });
+    await t.test('window-equal maxTokens with tool image succeeds while genuinely overfull context rejects before dispatch', async () => {
+      const route128k = { provider: 'synthetic-a', model: 'model-a-128k', reasoningEffort: 'max', maxTokens: 131072 };
+      const agent = await create('synthetic-budget-128k-ok', route128k, true), start = requests.length;
+      requestTool = true;
+      agent.followup(user([text('synthetic-128k-with-image'), image('a')])); await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed', JSON.stringify(lastTurn(agent)));
+      assert.equal(requests.length - start, 2);
+      assert.deepEqual(seedCounts(requests[start].body), fullSeed);
+      assert.deepEqual(seedCounts(requests[start + 1].body), fullSeed);
+
+      const full = await create('synthetic-budget-128k-full', route128k, true), beforeFull = requests.length;
+      full.followup(user([text('x'.repeat(420_000))])); await full.whenIdle();
+      assert.equal(lastTurn(full)?.kind, 'error');
+      assert.match(lastTurn(full)?.error?.message ?? '', /上下文已满/);
+      assert.equal(requests.length, beforeFull);
     });
     await t.test('settings revision drift fails before the selected provider fetch', async () => {
       const agent = await create('synthetic-drift', routes.a, true), start = requests.length;

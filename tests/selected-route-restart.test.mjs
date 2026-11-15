@@ -46,11 +46,11 @@ async function runModes(modes) {
   }
 }
 
-test('sidecar-only first turn, close, and other-provider continuation survive three process restarts', { timeout: 45000, skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to the DSH 0.2.2-alpha.2 node_modules directory' }, async () => {
+test('sidecar-only first turn, close, and other-provider continuation survive three process restarts', { timeout: 45000, skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to a supported DSH node_modules directory' }, async () => {
   assert.equal((await runModes(['create', 'resume-disable', 'resume-other'])).length, 3);
 });
 
-test('unsupported first request can be disabled and the disabled state survives restart', { timeout: 30000, skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to the DSH 0.2.2-alpha.2 node_modules directory' }, async () => {
+test('unsupported first request can be disabled and the disabled state survives restart', { timeout: 30000, skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to a supported DSH node_modules directory' }, async () => {
   assert.equal((await runModes(['failed-create', 'failed-resume'])).length, 2);
 });
 

@@ -11,20 +11,26 @@ export async function validateRuntime(runtime) {
     throw new Error('Full validation requires DSH_RUNTIME_NODE_MODULES set to an absolute installed DSH node_modules path. Use npm run test:portable for explicitly limited portable coverage.');
   }
   const manifest = JSON.parse(await readFile(packageUrl, 'utf8'));
-  const expected = manifest.engines.dsh;
+  const expectedRange = manifest.engines.dsh;
+  const supported = expectedRange.split('||').map(item => item.trim()).filter(Boolean);
   const packages = ['@deepseek-ai/dsh', ...Object.keys(manifest.peerDependencies).filter(name => name.startsWith('@deepseek-ai/dsh-'))];
+  let detectedVersion;
   for (const name of packages) {
     let installed;
     try {
       installed = JSON.parse(await readFile(join(runtime, name, 'package.json'), 'utf8'));
     } catch (cause) {
-      throw new Error(`Full validation requires installed ${name}@${expected} in ${runtime}`, { cause });
+      throw new Error(`Full validation requires installed ${name}@(${expectedRange}) in ${runtime}`, { cause });
     }
-    if (installed.name !== name || installed.version !== expected) {
-      throw new Error(`Unsupported host: ${name} must be ${expected}; found ${installed.name}@${installed.version}`);
+    if (installed.name !== name || !supported.includes(installed.version)) {
+      throw new Error(`Unsupported host: ${name} must satisfy ${expectedRange}; found ${installed.name}@${installed.version}`);
+    }
+    if (detectedVersion === undefined) detectedVersion = installed.version;
+    else if (installed.version !== detectedVersion) {
+      throw new Error(`Mixed host versions in ${runtime}: @deepseek-ai/dsh@${detectedVersion} vs ${installed.name}@${installed.version}`);
     }
   }
-  return expected;
+  return detectedVersion;
 }
 
 async function main() {

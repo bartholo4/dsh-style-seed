@@ -4,6 +4,8 @@ import { createUserMessage, contentHasImage, isAgentLoopRequest, requiredImageOf
   requestImageHandleText, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm';
 import { requestImageDimensions } from '@deepseek-ai/dsh-attachment';
 import { DEFAULTS, PROVIDER } from './base/constants.js';
+import { withinEstimatedBudget } from './budget.mjs';
+export { withinEstimatedBudget };
 import { bindImageVersions } from './base/image-context.js';
 import { prepareImageVersions } from './image-preparer.mjs';
 import { REFERENCE_TEXT } from './reference.mjs';
@@ -23,38 +25,6 @@ function deepFrozen(value, seen = new WeakSet()) {
     const property = Object.getOwnPropertyDescriptor(value, key);
     return property && Object.prototype.hasOwnProperty.call(property, 'value') && deepFrozen(property.value, seen);
   });
-}
-
-// This is a conservative byte-based preflight, not a provider tokenizer or a
-// guarantee about remote truncation. Reserve the adapter's entire configured
-// seed allowance plus per-message/tool framing and the requested output.
-export function withinEstimatedBudget(options, contextWindow, seedReserve = DEFAULTS.maxSeedBytes) {
-  if (!Number.isSafeInteger(contextWindow) || contextWindow <= 0 || !Number.isSafeInteger(seedReserve) || seedReserve < 0 ||
-      !Number.isSafeInteger(options.maxTokens) || options.maxTokens <= 0 || !Array.isArray(options.messages)) return false;
-  try {
-    const tools = options.tools ?? [];
-    if (!Array.isArray(tools)) return false;
-    let blocks = 0, images = 0, repeatedToolTextBytes = 0;
-    for (const message of options.messages) {
-      if (!Array.isArray(message?.content)) return false;
-      blocks += message.content.length;
-      images += message.content.filter(block => block?.type === 'image').length;
-      if (message.role === 'tool' && message.content.some(block => block?.type === 'image')) {
-        for (const block of message.content) if (block?.type === 'text' && typeof block.text === 'string') {
-          repeatedToolTextBytes += Buffer.byteLength(block.text, 'utf8');
-        }
-      }
-    }
-    const visible = JSON.stringify({ messages: options.messages, system: options.system, tools, toolHistory: options.toolHistory, stop: options.stop });
-    // Include extra envelope overhead for every message block (not merely for
-    // each message): one assistant turn can expand into many tool calls.
-    // Also reserve 32 seed-message envelopes, the validator's maximum.
-    // DeepSeek documents up to 1024 tokens per image; this remains an estimate
-    // for the configured gateway and is not a server-side capacity guarantee.
-    const estimate = Buffer.byteLength(visible, 'utf8') + repeatedToolTextBytes + seedReserve + options.maxTokens + images * 1024 + 4096 + 256 * 32 +
-      256 * (options.messages.length + tools.length + blocks);
-    return Number.isSafeInteger(estimate) && estimate < contextWindow;
-  } catch { return false; }
 }
 
 export function wireInputsFrozen(options) {

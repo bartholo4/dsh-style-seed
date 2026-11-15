@@ -8,7 +8,7 @@ import { createReferenceCodec } from '../src/reference.mjs';
 
 const runtime = process.env.DSH_RUNTIME_NODE_MODULES;
 test('independent admission detects removed, forged and mismatched references without changing other routes',
-  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to DSH 0.2.2-alpha.2 node_modules' }, async () => {
+  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to a supported DSH node_modules' }, async () => {
     const require = createRequire(join(runtime, '__candidate_guard_test.cjs'));
     const paths = new Map(['@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-attachment'].map(name => [name, pathToFileURL(require.resolve(name)).href]));
     const hook = registerHooks({ resolve(name, context, next) { return next(paths.get(name) ?? name, context); } });
@@ -47,7 +47,7 @@ test('independent admission detects removed, forged and mismatched references wi
   });
 
 test('configuration changes during durable activation are checked before dispatch',
-  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to DSH 0.2.2-alpha.2 node_modules' }, async () => {
+  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to a supported DSH node_modules' }, async () => {
     const require = createRequire(join(runtime, '__candidate_guard_race_test.cjs'));
     const paths = new Map(['@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-attachment'].map(name => [name, pathToFileURL(require.resolve(name)).href]));
     const hook = registerHooks({ resolve(name, context, next) { return next(paths.get(name) ?? name, context); } });
@@ -75,7 +75,7 @@ test('configuration changes during durable activation are checked before dispatc
   });
 
 test('child, seeded, delegated and missing agents always pass through before reading references',
-  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to DSH 0.2.2-alpha.2 node_modules' }, async () => {
+  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to a supported DSH node_modules' }, async () => {
     const require = createRequire(join(runtime, '__candidate_ineligible_guard_test.cjs'));
     const paths = new Map(['@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-attachment'].map(name => [name, pathToFileURL(require.resolve(name)).href]));
     const hook = registerHooks({ resolve(name, context, next) { return next(paths.get(name) ?? name, context); } });

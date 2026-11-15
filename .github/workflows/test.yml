@@ -7,14 +7,24 @@ permissions:
 jobs:
   full-host-regression:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dsh_version:
+          - 0.2.2-alpha.2
+          - 0.2.2-rc.3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24.22.1'
-      - name: Install the supported isolated DSH host
-        run: npm install --prefix "$RUNNER_TEMP/dsh-runtime" --no-audit --no-fund @deepseek-ai/dsh@0.2.2-alpha.2
+      - name: Install the supported isolated DSH host (${{ matrix.dsh_version }})
+        run: npm install --prefix "$RUNNER_TEMP/dsh-runtime" --no-audit --no-fund "@deepseek-ai/dsh@${{ matrix.dsh_version }}"
       - name: Check generated client and full regression suite (no model requests)
         run: npm run check
+        env:
+          DSH_RUNTIME_NODE_MODULES: ${{ runner.temp }}/dsh-runtime/node_modules
+      - name: Run host lifecycle regression suite (no model requests)
+        run: npm run test:lifecycle
         env:
           DSH_RUNTIME_NODE_MODULES: ${{ runner.temp }}/dsh-runtime/node_modules

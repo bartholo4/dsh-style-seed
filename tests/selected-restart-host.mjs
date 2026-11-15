@@ -21,7 +21,7 @@ const runtime = process.env.DSH_RUNTIME_NODE_MODULES;
 if (!runtime || !rawDirectory || !['create', 'resume-disable', 'resume-other', 'failed-create', 'failed-resume'].includes(mode)) throw new Error('synthetic host arguments invalid');
 const directory = resolve(rawDirectory);
 const require = createRequire(join(runtime, '__selected_synthetic_restart.cjs'));
-assert.equal(require('@deepseek-ai/dsh-llm-pi-ai/package.json').version, '0.2.2-alpha.2');
+assert.ok(['0.2.2-alpha.2', '0.2.2-rc.3'].includes(require('@deepseek-ai/dsh-llm-pi-ai/package.json').version));
 const names = ['@deepseek-ai/cordis', '@deepseek-ai/schemastery', '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-agent-loop',
   '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-llm-pi-ai', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-session',
   '@deepseek-ai/dsh-session-projection', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-tool-executor-native',

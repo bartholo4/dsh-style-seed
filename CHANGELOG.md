@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-experimental.15
+
+- Support DSH `0.2.2-rc.3` alongside `0.2.2-alpha.2` (`engines.dsh`, peer dependency ranges, `./cordis.patch.yml` export, strict single-version host gate across supported versions, and dual-host CI matrix).
+- Fix false `"weneed开关的会话上下文已满"` preflight rejections during multi-step tool/image first turns and on models with high `maxTokens`: strip non-wire replay metadata and binary/base64 image payloads before byte counting (images remain budgeted at 1,024 tokens each), convert UTF-8 text bytes with a conservative ~3 bytes/token bound, and cap preflight output reservation to `Math.min(maxTokens, Math.floor(contextWindow / 4))` while still rejecting genuinely overfull contexts.
+- Normalize CRLF line endings in `scripts/build-client.mjs` and add `.gitattributes` so `npm run check:client` succeeds on Windows checkouts as well as Linux CI.
+- Document hybrid-model reasoning effort behavior (some models such as `deepseek-v4.1-flash` may require selecting an explicit reasoning effort such as `High` or `Max` when `Default` does not emit reasoning blocks).
+- **Still experimental:** hot unload is not atomic with host input admission. Stop all submissions, drain work, and shut down DSH before updates or removal.
+
 ## 0.2.0-experimental.14
 
 - Separate switch-edit admission from live agent ownership during drain, preserving accepted input and seeded requests through route resolution.

@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 const runtime = process.env.DSH_RUNTIME_NODE_MODULES;
 test('cold status is saved-only, validates ownership, and never relaxes set',
-  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to DSH 0.2.2-alpha.2 node_modules' }, async () => {
+  { skip: !runtime && 'Set DSH_RUNTIME_NODE_MODULES to a supported DSH node_modules' }, async () => {
     const require = createRequire(join(runtime, '__candidate_host_state_test.cjs'));
     const protocol = pathToFileURL(require.resolve('@deepseek-ai/dsh-typert-protocol')).href;
     const hook = registerHooks({ resolve(name, context, next) {

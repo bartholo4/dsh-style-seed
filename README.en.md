@@ -18,10 +18,10 @@ In an earlier experiment using the same sample content as the public example, 14
 
 ## Scope
 
-- Tested host target: DSH `0.2.2-alpha.2`, Web; Node.js `>=24.9.0`.
-- The switch is off by default. Enable it before the first message; once a started session has been turned off, start a new session to turn it on again.
+- Tested host targets: DSH `0.2.2-alpha.2` and `0.2.2-rc.3`, Web client surface (including `0.2.2-rc.3` Electron desktop, which embeds the same Web UI modules); Node.js `>=24.9.0`.
+- The switch is off by default. Enable it before the first message; once a started session has been turned off, start a new session to turn it on again. Note that hybrid reasoning models (such as `deepseek-v4.1-flash`) may omit reasoning blocks at `Default` effort unless an explicit effort such as `High` or `Max` is selected.
 - The sample is included in first-turn requests and necessary tool continuations until the first successful reply. It is not inserted into the new session's event history. The first actual answer can still carry sample influence into later turns.
-- OpenAI Chat Completions and the official DSH DeepSeek Messages mapping are implemented. Other protocols may be rejected. Image and tool handling have synthetic coverage; one d1api configuration has limited live smoke coverage, detailed in the [current validation report](docs/VALIDATION-2026-11-01.md). Other providers and daily Electron desktop use have not been validated.
+- OpenAI Chat Completions and the official DSH DeepSeek Messages mapping are implemented. Other protocols may be rejected. Image and multi-step tool handling have synthetic coverage; one d1api configuration has limited live smoke coverage, detailed in the [current validation report](docs/VALIDATION-2026-11-01.md). Shut down the DSH service or desktop app completely before updating or removing the plugin.
 - The provided [example](examples/we-need-seed.json) was approved for publication. Its source metadata is redacted. The example is sent to the selected model service when the switch is enabled.
 
 ## Install for isolated testing
@@ -61,8 +61,8 @@ The code and example dialogue/reasoning excerpts approved for publication by the
 ## Reproducible development checks
 
 ```bash
-# Install the official pinned DSH into a separate disposable directory.
-npm install --prefix /tmp/dsh-test-runtime @deepseek-ai/dsh@0.2.2-alpha.2
+# Install a supported official DSH version (0.2.2-alpha.2 or 0.2.2-rc.3) into a separate disposable directory.
+npm install --prefix /tmp/dsh-test-runtime @deepseek-ai/dsh@0.2.2-rc.3
 export DSH_RUNTIME_NODE_MODULES=/tmp/dsh-test-runtime/node_modules
 npm run check
 ```
@@ -73,7 +73,7 @@ The `.14` cloud check on Node `24.22.1` with installed DSH `0.2.2-alpha.2` passe
 
 The `.14` switch shows an explicit status retry after an RPC failure. Retry only reads server state: it never resends an uncertain write. Session and generation guards discard stale responses.
 
-For enabled requests with a known context window, the plugin requires a concrete output-token cap to reserve its conservative budget. With the official pi-ai adapter, set `models[].maxTokens` (for example, `2048` in an isolated test profile); provider-level `defaultMaxTokens` alone does not necessarily supply a concrete host request cap. Missing caps now produce an actionable configuration error; the plugin does not silently override the selected model controls.
+For enabled requests with a known context window, the plugin requires a concrete output-token cap to reserve its conservative budget. With the official pi-ai adapter, set `models[].maxTokens` (for example, `2048` in an isolated test profile); provider-level `defaultMaxTokens` alone does not necessarily supply a concrete host request cap. Missing caps produce an actionable configuration error; release `.15` also strips non-wire metadata and binary/base64 image payloads from byte-based preflight estimation (`~3 bytes/token` plus 1,024 tokens per image, with output headroom capped at `1/4` of `contextWindow`) so multi-step tool/screenshot first turns and high `maxTokens` caps do not falsely report a full context.
 
 ## Limited live Web validation
 
