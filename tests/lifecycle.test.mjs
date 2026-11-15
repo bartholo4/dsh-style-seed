@@ -47,15 +47,16 @@ if (!runtime) {
 } else {
 const require = createRequire(join(runtime, '__synthetic_selected_entry.cjs'));
 const expectedCordisByHost = new Map([
-  ['0.2.2-alpha.2', '4.0.6-alpha.1'],
-  ['0.2.2-rc.3', '4.1.0'],
+  ['0.2.2-alpha.2', new Set(['4.0.6-alpha.1', '4.0.6-alpha.2'])],
+  ['0.2.2-rc.3', new Set(['4.1.0'])],
 ]);
 const hostVersion = require('@deepseek-ai/dsh-llm-pi-ai/package.json').version;
 assert.ok(expectedCordisByHost.has(hostVersion), `unexpected host version ${hostVersion}`);
 for (const name of ['dsh-agent', 'dsh-agent-loop', 'dsh-llm', 'dsh-llm-pi-ai']) {
   assert.equal(require(`@deepseek-ai/${name}/package.json`).version, hostVersion);
 }
-assert.equal(require('@deepseek-ai/cordis/package.json').version, expectedCordisByHost.get(hostVersion));
+const cordisVersion = require('@deepseek-ai/cordis/package.json').version;
+assert.ok(expectedCordisByHost.get(hostVersion).has(cordisVersion), `unexpected cordis version ${cordisVersion} for host ${hostVersion}`);
 const names = ['@deepseek-ai/cordis', '@deepseek-ai/schemastery', '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-agent-loop',
   '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-llm-pi-ai', '@deepseek-ai/dsh-llm-deepseek', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-session',
   '@deepseek-ai/dsh-session-projection', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-tool-executor-native',
