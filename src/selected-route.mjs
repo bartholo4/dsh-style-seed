@@ -71,16 +71,29 @@ export function restoreLegacyReasoning(messages, route, reasoningField = 'reason
   });
 }
 
+export const SEED_REASONING_PLACEMENTS = Object.freeze(['native', 'inline-plain', 'inline-think-tag']);
+
 // The pi-ai field selector is adapter metadata, not a cryptographic signature.
 // This exists only on temporary, user-authorized imported sample messages.
-export function seedMessages(template, route, reasoningField = 'reasoning', protocol = 'openai-completions') {
+// Optional inline placements ('inline-plain', 'inline-think-tag') embed seed
+// reasoning into the temporary seed assistant text for relays/models that strip
+// standalone historical reasoning fields, without mutating real history.
+export function seedMessages(template, route, reasoningField = 'reasoning', protocol = 'openai-completions', placement = 'native') {
   if (!['reasoning','reasoning_content','reasoning_text'].includes(reasoningField)) throw new Error('weneed开关无法映射所选接口的思考字段');
   if (!['openai-completions','deepseek-messages'].includes(protocol)) throw new Error('weneed开关无法映射所选接口格式');
+  if (!SEED_REASONING_PLACEMENTS.includes(placement)) throw new Error('weneed开关无法映射所选思考内联模式');
   return template.messages.map(message => {
     if (message.role === 'user') return createUserMessage({source:{kind:'user'},content:[text(message.content)]});
+    const hasReasoning = typeof message.reasoning === 'string' && message.reasoning !== '';
     const content = [];
-    if (message.reasoning !== undefined && message.reasoning !== '') content.push({type:'reasoning',text:message.reasoning});
-    content.push(text(message.content));
+    if (placement === 'native') {
+      if (hasReasoning) content.push({type:'reasoning',text:message.reasoning});
+      content.push(text(message.content));
+    } else if (placement === 'inline-plain') {
+      content.push(text(hasReasoning ? `${message.reasoning}\n\n${message.content}` : message.content));
+    } else {
+      content.push(text(hasReasoning ? `<think>\n${message.reasoning}\n</think>\n${message.content}` : message.content));
+    }
     if (protocol === 'deepseek-messages') return createAssistantMessage({source:{provider:route.provider,model:route.model},content});
     const replayState = {response:{kind:'pi-ai',version:2,api:'openai-completions',provider:route.provider,model:route.model,stopReason:'stop'},
       blocks:content.map(block => block.type === 'reasoning' ? {type:'reasoning',thinkingSignature:reasoningField} : {type:'text'})};

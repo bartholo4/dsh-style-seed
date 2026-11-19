@@ -1,6 +1,6 @@
 {
   "name": "dsh-style-seed",
-  "version": "0.2.0-experimental.16",
+  "version": "0.2.0-experimental.17",
   "private": true,
   "description": "Experimental per-session weneed switch for DeepSeek Harness",
   "repository": {

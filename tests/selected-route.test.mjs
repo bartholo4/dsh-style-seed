@@ -41,6 +41,16 @@ test('selected route projection keeps model-specific data transient and preserve
         const native=seedMessages(template,{provider:'deepseek-official',model:'synthetic'},'reasoning','deepseek-messages');
         assert.equal(native[1].content[0].text,'sample reasoning');
         assert.equal(native[1].source.replayState,undefined);
+        const inlinePlain=seedMessages(template,route,'reasoning','openai-completions','inline-plain');
+        assert.equal(inlinePlain[1].content.length,1);
+        assert.equal(inlinePlain[1].content[0].type,'text');
+        assert.equal(inlinePlain[1].content[0].text,'sample reasoning\n\nsample answer');
+        assert.deepEqual(inlinePlain[1].source.replayState.blocks,[{type:'text'}]);
+        const inlineThink=seedMessages(template,{provider:'deepseek-official',model:'synthetic'},'reasoning','deepseek-messages','inline-think-tag');
+        assert.equal(inlineThink[1].content.length,1);
+        assert.equal(inlineThink[1].content[0].text,'<think>\nsample reasoning\n</think>\nsample answer');
+        assert.equal(inlineThink[1].source.replayState,undefined);
+        assert.throws(()=>seedMessages(template,route,'reasoning','openai-completions','invalid'),/思考内联模式/);
       });
       await t.test('official Messages service is identified by its registered service type',()=>{
         const direct={llm:{listConfigurableProviders:()=>[{provider:'deepseek-official',settingsNs:'llm-deepseek-api-key',settingsPath:[]}]},

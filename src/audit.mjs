@@ -16,11 +16,11 @@ export function resolveAuditPath(env = process.env, home = homedir()) {
 
 const ALLOWED_FIELDS = [
   'event', 'reason', 'sessionId', 'inheritedFrom', 'provider', 'model', 'api',
-  'field', 'includeSeed', 'afterCompaction', 'messageCount', 'estimatedTokens',
-  'contextWindow', 'errorCode',
+  'field', 'placement', 'keepPrefix', 'includeSeed', 'afterCompaction',
+  'messageCount', 'estimatedTokens', 'contextWindow', 'errorCode',
 ];
 
-export function createAuditLogger({ enabled = false, version = '0.2.0-experimental.16', filePath } = {}) {
+export function createAuditLogger({ enabled = false, version = '0.2.0-experimental.17', filePath } = {}) {
   if (!enabled) return Object.freeze({ enabled: false, record() {} });
   const target = typeof filePath === 'string' && filePath.trim() ? filePath.trim() : resolveAuditPath();
   let dirReady = false;

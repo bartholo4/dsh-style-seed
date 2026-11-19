@@ -103,6 +103,12 @@ test('sidecarNeedsSeed resets after compaction boundary and respects reseedAfter
   // Completing the first post-compaction turn stops re-seeding again
   const afterPostCompactReply = [...afterCompaction, ...completedTurn(2, 'user')];
   assert.deepEqual(sidecarNeedsSeed(afterPostCompactReply, { reseedAfterCompaction: true }), { needed: false, afterCompaction: true });
+
+  // keepSeedPrefix retains projection on subsequent turns in both initial and post-compaction cycles
+  assert.deepEqual(sidecarNeedsSeed([], { keepSeedPrefix: true }), { needed: true, afterCompaction: false });
+  assert.deepEqual(sidecarNeedsSeed(afterGoal, { keepSeedPrefix: true }), { needed: true, afterCompaction: false, keptPrefix: true });
+  assert.deepEqual(sidecarNeedsSeed(afterCompaction, { reseedAfterCompaction: true, keepSeedPrefix: true }), { needed: true, afterCompaction: true });
+  assert.deepEqual(sidecarNeedsSeed(afterPostCompactReply, { reseedAfterCompaction: true, keepSeedPrefix: true }), { needed: true, afterCompaction: true, keptPrefix: true });
 });
 
 test('eligibility distinguishes top-level vs inheritable child and walks ancestor admission safely', () => {
@@ -155,13 +161,16 @@ test('audit logger respects DSH_HOME, defaults off, strips disallowed fields, an
   const dir = mkdtempSync(join(tmpdir(), 'dsh-style-seed-audit-'));
   try {
     const filePath = join(dir, 'nested', AUDIT_FILENAME);
-    const logger = createAuditLogger({ enabled: true, filePath, version: '0.2.0-experimental.16' });
+    const logger = createAuditLogger({ enabled: true, filePath, version: '0.2.0-experimental.17' });
     logger.record({
       event: 'inject',
-      reason: 'first-turn',
+      reason: 'keep-prefix',
       sessionId: 'session-test',
       provider: 'synthetic-a',
       model: 'model-a',
+      field: 'content',
+      placement: 'inline-plain',
+      keepPrefix: true,
       includeSeed: true,
       afterCompaction: false,
       estimatedTokens: 1234,
@@ -170,18 +179,20 @@ test('audit logger respects DSH_HOME, defaults off, strips disallowed fields, an
       prompt: 'SECRET_PROMPT',
       reasoning: 'SECRET_REASONING',
       seed: 'SECRET_SEED',
-      apiKey: 'sk-secret-value',
+      apiKey: 'SECRET_API_KEY_VALUE',
     });
     const raw = readFileSync(filePath, 'utf8').trim();
     const parsed = JSON.parse(raw);
-    assert.equal(parsed.v, '0.2.0-experimental.16');
+    assert.equal(parsed.v, '0.2.0-experimental.17');
     assert.equal(parsed.event, 'inject');
+    assert.equal(parsed.placement, 'inline-plain');
+    assert.equal(parsed.keepPrefix, true);
     assert.equal(parsed.estimatedTokens, 1234);
     assert.equal(parsed.prompt, undefined);
     assert.equal(parsed.reasoning, undefined);
     assert.equal(parsed.seed, undefined);
     assert.equal(parsed.apiKey, undefined);
-    assert.doesNotMatch(raw, /SECRET_PROMPT|SECRET_REASONING|SECRET_SEED|sk-secret/);
+    assert.doesNotMatch(raw, /SECRET_PROMPT|SECRET_REASONING|SECRET_SEED|SECRET_API_KEY/);
 
     // Invalid file path (writing onto existing directory) must never throw
     const badLogger = createAuditLogger({ enabled: true, filePath: dir });

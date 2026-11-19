@@ -20,7 +20,8 @@
 
 - 每个新会话的开关默认关闭；选择模型后，可在发送首条消息前手动开启。
 - 开启后沿用 DSH 当前选择的服务、模型和请求参数；不要求固定某个中转站或模型名称。
-- 在第一个成功答复之前，将样例作为临时历史加入请求；首轮涉及工具调用时，相应续步仍带样例。首答完成后不再直接加入该样例；当长会话触发 DSH 上下文压缩（Compaction）后，默认在压缩后的第一轮新任务再临时前置一次样例（可通过 `reseedAfterCompaction: false` 关闭），绝不修改压缩提示词，也不写入会话日志。
+- 在第一个成功答复之前，将样例作为临时历史加入请求；首轮涉及工具调用时，相应续步仍带样例。首答完成后默认不再直接加入该样例；当长会话触发 DSH 上下文压缩（Compaction）后，默认在压缩后的第一轮新任务再临时前置一次样例（可通过 `reseedAfterCompaction: false` 关闭），绝不修改压缩提示词，也不写入会话日志。
+- 若所选中转站或模型会静默丢弃历史消息中的独立 `reasoning` / `reasoning_content` 字段，可按需启用 `seedReasoningPlacement: "inline-plain"`（或 `"inline-think-tag"`，默认 `"native"`）将临时样例的思考文本内联进样例 `assistant.content`，并可配合 `keepSeedPrefix: true`（默认 `false`）在同一周期的后续轮次保持相同临时样例前缀（既延续多轮风格又不破坏前缀 Prompt Cache，后续轮次若切到不兼容路由或接近预算则平滑跳过）。二者均仅作用于瞬态样例，不修改 `system`、工具定义、真实历史或会话日志。
 - 通过 `source.kind` 区分 DSH 运行时上下文与真实任务入口，支持普通会话、Goal 模式与 Schedule 任务首轮；如需让已开启开关的父会话把首轮样例继承给子代理（Sub-agent / Team 成员），可在配置中显式开启 `inheritToChildren: true`（默认关闭；子代理切到不兼容模型时自动平滑跳过而不报错）。
 - 提供默认关闭的脱敏诊断日志开关 `auditLog: true`（仅记录决策与预算估算元数据至 `<DSH_HOME>/storages/dsh-style-seed-audit.jsonl`，不记录任何正文、思考、样例或凭据）。
 - 新会话的样例正文不写入会话事件；开关状态及必要的校验信息由插件保存。样例会发送给所选模型服务，切勿把不愿提供给该服务的信息放进样例。
@@ -59,9 +60,11 @@ dsh plugin --profile web add .
     followSelected: true
     seedPath: "/absolute/path/to/dsh-style-seed/examples/we-need-seed.json"
     # 以下均为可选配置（展示默认值）：
-    # reseedAfterCompaction: true   # 上下文压缩后，对压缩后的首轮新任务再临时前置一次样例
-    # inheritToChildren: false      # 开启后，仅已打开开关的父会话可将首轮样例继承给子代理 / Team 成员
-    # auditLog: false               # 开启后，将脱敏决策日志写入 <DSH_HOME>/storages/dsh-style-seed-audit.jsonl
+    # reseedAfterCompaction: true       # 上下文压缩后，对压缩后的首轮新任务再临时前置一次样例
+    # inheritToChildren: false          # 开启后，仅已打开开关的父会话可将首轮样例继承给子代理 / Team 成员
+    # seedReasoningPlacement: "native"  # "native" | "inline-plain" | "inline-think-tag"（适配剥离独立历史 reasoning 字段的中转）
+    # keepSeedPrefix: false             # 开启后，当前周期后续轮次继续保留同一份瞬态样例前缀以维持多轮风格与前缀缓存
+    # auditLog: false                   # 开启后，将脱敏决策日志写入 <DSH_HOME>/storages/dsh-style-seed-audit.jsonl
 ```
 
 将 `seedPath` 换成**本机实际存在的绝对路径**。Windows 可使用例如 `C:/path/to/...` 的绝对路径。`seedPath` 缺失或文件格式不合法时，组件不会正常启用。配置服务商和凭据仍使用 DSH 自己的方式，勿把真实密钥写进此仓库或样例。

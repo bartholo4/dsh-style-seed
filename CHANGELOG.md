@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-experimental.17
+
+- **Optional inline seed reasoning placement (`seedReasoningPlacement`, default `'native'`)**: supports `'native'` (standalone `reasoning` / `reasoning_content` field, unchanged default), `'inline-plain'` (prepends seed reasoning as plain text inside temporary seed `assistant.content`), and `'inline-think-tag'` (wraps seed reasoning in `<think>...</think>` inside temporary seed `assistant.content`). Designed for OpenAI-compatible relays or models that silently strip standalone historical reasoning fields. Applies strictly to transient seed messages; never modifies system prompts, tool definitions, real conversation history, or session logs.
+- **Optional cycle-wide seed prefix retention (`keepSeedPrefix`, default `false`)**: when enabled, keeps projecting the same transient seed prefix at the start of the active cycle (initial turn or after the latest compaction boundary) on subsequent turns as well, preserving prompt-cache prefix stability and multi-turn style continuity on relays that strip historical `reasoning` fields. Subsequent turns degrade gracefully (`next()`) if the route becomes incompatible or approaches context budget limits.
+- **Audit metadata**: opt-in `auditLog` now also records `placement` and `keepPrefix` (metadata only; still zero prompt/reasoning/seed text or credentials).
+- **Still experimental:** hot unload is not atomic with host input admission. Stop all submissions, drain work, and shut down DSH before updates or removal.
+
 ## 0.2.0-experimental.16
 
 - **Post-compaction first-turn re-seeding (`reseedAfterCompaction`, default `true`)**: detects DSH compaction boundaries (`compaction/summary` / `compact-checkpoint`) and projects the authorized example once again before the first task turn after compaction, omitting it again once that post-compaction reply completes. Never alters compaction prompts, never writes the example to session history, and degrades gracefully if the post-compaction route or budget cannot accept the example.

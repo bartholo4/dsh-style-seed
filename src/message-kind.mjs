@@ -94,9 +94,10 @@ export function findSeedInsertionIndex(messages, { afterLastCompaction = false }
 }
 
 // Determine whether a sidecar-only session still needs D projected for the
-// current cycle (either the initial turn or, when reseedAfterCompaction is
-// enabled, the first completed task turn after the latest compaction boundary).
-export function sidecarNeedsSeed(events, { reseedAfterCompaction = true } = {}) {
+// current cycle (either the initial turn, the first completed task turn after
+// the latest compaction boundary when reseedAfterCompaction is enabled, or
+// subsequent turns in the same cycle when keepSeedPrefix is enabled).
+export function sidecarNeedsSeed(events, { reseedAfterCompaction = true, keepSeedPrefix = false } = {}) {
   if (!Array.isArray(events)) return { needed: true, afterCompaction: false };
   let lastCompaction = -1;
   if (reseedAfterCompaction) {
@@ -104,6 +105,7 @@ export function sidecarNeedsSeed(events, { reseedAfterCompaction = true } = {}) 
       if (isCompactionBoundaryEvent(events[i])) { lastCompaction = i; break; }
     }
   }
+  const afterCompaction = lastCompaction >= 0;
   let turn;
   for (let i = lastCompaction + 1; i < events.length; i++) {
     const event = events[i];
@@ -116,12 +118,14 @@ export function sidecarNeedsSeed(events, { reseedAfterCompaction = true } = {}) 
       if (turn.user && data?.reason?.kind === 'completed' && Array.isArray(blocks) &&
           blocks.some(block => block.type === 'text' && typeof block.text === 'string' && block.text.trim()) &&
           !blocks.some(block => block.type === 'tool-call')) {
-        return { needed: false, afterCompaction: lastCompaction >= 0 };
+        return keepSeedPrefix
+          ? { needed: true, afterCompaction, keptPrefix: true }
+          : { needed: false, afterCompaction };
       }
       turn = undefined;
     }
   }
-  return { needed: true, afterCompaction: lastCompaction >= 0 };
+  return { needed: true, afterCompaction };
 }
 
 // New enabled sessions are blank at admission, so the first completed real

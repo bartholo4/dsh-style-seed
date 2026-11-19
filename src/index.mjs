@@ -32,6 +32,8 @@ export const Config = z.object({
   followSelected: z.boolean().default(true),
   reseedAfterCompaction: z.boolean().default(true),
   inheritToChildren: z.boolean().default(false),
+  seedReasoningPlacement: z.union(['native', 'inline-plain', 'inline-think-tag']).default('native'),
+  keepSeedPrefix: z.boolean().default(false),
   auditLog: z.boolean().default(false),
   reasoningEffort: z.union(['max']).default('max'),
   maxOutputTokens: z.number().step(1).min(1).default(8192),

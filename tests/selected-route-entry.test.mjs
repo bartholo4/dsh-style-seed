@@ -606,6 +606,47 @@ test('selected-route entry with real AgentLoop and PiAiAdapter, entirely synthet
       assert.equal(requests.length - beforeUnsupportedChild, 1);
       assert.equal(requests.at(-1).url, 'https://gamma.synthetic.invalid/v1/responses');
     });
+
+    await t.test('inline-plain placement with keepSeedPrefix keeps seed prefix across turns and degrades gracefully on incompatible routes', async () => {
+      const prevFiber = fibers.pop();
+      await prevFiber.dispose();
+      fibers.push(await ctx.plugin(plugin, {
+        enabled: true, followSelected: true, seedPath, firstTurnOnly: true,
+        seedReasoningPlacement: 'inline-plain', keepSeedPrefix: true,
+      }));
+
+      const agent = await create('synthetic-inline-keep', routes.a, true);
+
+      const before = requests.length;
+      agent.followup(user([text('inline-turn-1')]));
+      await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed', JSON.stringify(lastTurn(agent)));
+      assert.equal(requests.length - before, 1);
+      const turn1Wire = requests.at(-1).body.messages;
+      const seedAsst1 = turn1Wire.filter(m => m.role === 'assistant');
+      assert.equal(seedAsst1.length, 1);
+      assert.equal(seedAsst1[0].reasoning, undefined);
+      assert.equal(seedAsst1[0].reasoning_content, undefined);
+      assert.equal(seedAsst1[0].content, 'synthetic-seed-reasoning\n\nsynthetic-seed-answer');
+      assert.doesNotMatch(JSON.stringify(agent.session.snapshotEvents()), /synthetic-seed-user|synthetic-seed-reasoning|synthetic-seed-answer/);
+
+      // Turn 2 retains the exact same inline-plain seed prefix before Turn 1 user message
+      agent.followup(user([text('inline-turn-2')]));
+      await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed', JSON.stringify(lastTurn(agent)));
+      assert.equal(requests.length - before, 2);
+      const turn2Wire = requests.at(-1).body.messages;
+      assert.deepEqual(turn2Wire.slice(0, turn1Wire.length), turn1Wire);
+      assert.equal(turn2Wire.at(-1).content, 'inline-turn-2');
+
+      // Switching to an unsupported protocol on Turn 3 gracefully skips without failing the session
+      await agent.model.select(routes.c);
+      agent.followup(user([text('inline-turn-3-unsupported')]));
+      await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed', JSON.stringify(lastTurn(agent)));
+      assert.equal(requests.length - before, 3);
+      assert.equal(requests.at(-1).url, 'https://gamma.synthetic.invalid/v1/responses');
+    });
     assert.equal(networkAttempts, 0);
   } finally {
     for (const handle of handles.reverse()) await handle.dispose();
