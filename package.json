@@ -1,6 +1,6 @@
 {
   "name": "dsh-style-seed",
-  "version": "0.2.0-experimental.15",
+  "version": "0.2.0-experimental.16",
   "private": true,
   "description": "Experimental per-session weneed switch for DeepSeek Harness",
   "repository": {
@@ -28,12 +28,16 @@
     ".": "./src/index.mjs",
     "./client": "./client.bundle.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "src",
     "examples",
     "docs",
+    "locale",
+    "icon.svg",
     "client.bundle.js",
     "cordis.patch.yml",
     "README.md",

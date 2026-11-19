@@ -20,7 +20,8 @@ In an earlier experiment using the same sample content as the public example, 14
 
 - Tested host targets: DSH `0.2.2-alpha.2` and `0.2.2-rc.3`, Web client surface (including `0.2.2-rc.3` Electron desktop, which embeds the same Web UI modules); Node.js `>=24.9.0`.
 - The switch is off by default. Enable it before the first message; once a started session has been turned off, start a new session to turn it on again. Note that hybrid reasoning models (such as `deepseek-v4.1-flash`) may omit reasoning blocks at `Default` effort unless an explicit effort such as `High` or `Max` is selected.
-- The sample is included in first-turn requests and necessary tool continuations until the first successful reply. It is not inserted into the new session's event history. The first actual answer can still carry sample influence into later turns.
+- The sample is included in first-turn requests and necessary tool continuations until the first successful reply, without writing the sample into session history. After a DSH context compaction boundary (`compaction/summary` / `compact-checkpoint`), `reseedAfterCompaction` (default `true`) projects the sample once more before the first post-compaction task turn while leaving compaction prompts untouched.
+- Task classification recognizes `user`, `goal`, `schedule`, and `tool-goal` entries while ignoring DSH runtime/skill/team context blocks. Setting `inheritToChildren: true` (default `false`) allows child subagent/team sessions spawned under an enabled top-level session to inherit first-turn sidecar seeding (degrading gracefully if a child routes to an unsupported protocol/model). Setting `auditLog: true` (default `false`) writes metadata-only NDJSON diagnostics to `<DSH_HOME>/storages/dsh-style-seed-audit.jsonl`.
 - OpenAI Chat Completions and the official DSH DeepSeek Messages mapping are implemented. Other protocols may be rejected. Image and multi-step tool handling have synthetic coverage; one d1api configuration has limited live smoke coverage, detailed in the [current validation report](docs/VALIDATION-2026-11-01.md). Shut down the DSH service or desktop app completely before updating or removing the plugin.
 - The provided [example](examples/we-need-seed.json) was approved for publication. Its source metadata is redacted. The example is sent to the selected model service when the switch is enabled.
 
@@ -42,6 +43,10 @@ Configure the existing `dsh-style-seed` row using the DSH settings interface or 
     enabled: true
     followSelected: true
     seedPath: "/absolute/path/to/dsh-style-seed/examples/we-need-seed.json"
+    # Optional flags (defaults shown):
+    # reseedAfterCompaction: true
+    # inheritToChildren: false
+    # auditLog: false
 ```
 
 If the row already exists, edit it rather than adding a duplicate. Restart the stopped Web profile, create a new session, choose a model, and enable the session switch. This project is distributed as a GitHub source repository; it has not been published to npm.

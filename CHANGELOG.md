@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0-experimental.16
+
+- **Post-compaction first-turn re-seeding (`reseedAfterCompaction`, default `true`)**: detects DSH compaction boundaries (`compaction/summary` / `compact-checkpoint`) and projects the authorized example once again before the first task turn after compaction, omitting it again once that post-compaction reply completes. Never alters compaction prompts, never writes the example to session history, and degrades gracefully if the post-compaction route or budget cannot accept the example.
+- **Task-kind classification (`src/message-kind.mjs`)**: distinguishes DSH runtime/skill/team context blocks from real task entries (`user`, `goal`, `schedule`, `tool-goal`), enabling Goal-mode first turns without rewriting or reordering host messages.
+- **Optional child/subagent inheritance (`inheritToChildren`, default `false`)**: when enabled in plugin config, child subagent or team sessions spawned under a top-level session whose weneed switch is ON inherit first-turn sidecar seeding; children of OFF/disabled sessions stay untouched, and children routed to unsupported protocols/models degrade gracefully without failing.
+- **Opt-in privacy-safe audit log (`auditLog`, default `false`)**: when enabled, appends metadata-only NDJSON decisions (session ID, decision reason, estimated tokens, context window; zero prompt/reasoning/seed text or credentials) to `<DSH_HOME>/storages/dsh-style-seed-audit.jsonl`.
+- **Desktop plugin display metadata**: added `icon.svg`, `locale/zh.json`, and `locale/en.json` exported via `package.json`.
+- **Still experimental:** hot unload is not atomic with host input admission. Stop all submissions, drain work, and shut down DSH before updates or removal.
+
 ## 0.2.0-experimental.15
 
 - Support DSH `0.2.2-rc.3` alongside `0.2.2-alpha.2` (`engines.dsh`, peer dependency ranges, `./cordis.patch.yml` export, strict single-version host gate across supported versions, and dual-host CI matrix).

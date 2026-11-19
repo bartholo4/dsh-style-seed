@@ -8,6 +8,7 @@ import { installSelectionCapture } from './selection-capture.mjs';
 import { installSelectedAgent, installSelectedStream } from './selected-stream.mjs';
 import { installSelectedRecovery, installSelectedOverflowRecovery } from './selected-recovery.mjs';
 import { isEligibleTopLevel } from './eligibility.mjs';
+import { createAuditLogger } from './audit.mjs';
 import SwitchContractService from './host.mjs';
 
 export async function applySelectedRuntime(ctx,config,gate) {
@@ -16,6 +17,9 @@ export async function applySelectedRuntime(ctx,config,gate) {
   const codec=await loadOrCreateReferenceCodec(ctx.credentials,credentialKey);
   const store=await openAdmissionStore(ctx.storageDomain);
   const firstOnly=config.firstTurnOnly ? makeFirstTurnClassifier(ctx,codec,registry.defaultIdentity.sha256) : undefined;
+  const reseedAfterCompaction=config.reseedAfterCompaction !== false;
+  const inheritToChildren=config.inheritToChildren === true;
+  const audit=createAuditLogger({ enabled: config.auditLog === true });
   const listeners=new Map(), routeByAgent=new WeakMap();
   const topology={revision:0,settingsRevision:0};
   let hostFiber,stopTopology,stopSettings;
@@ -28,7 +32,7 @@ export async function applySelectedRuntime(ctx,config,gate) {
       isManaged:agent=>listeners.get(agent?.id)?.agent===agent});
     const contract=ctx.get('switchContract')?.contract;
     if (!contract) throw new Error('history switch service unavailable');
-    const stopStream=installSelectedStream(ctx,{codec,store,registry,firstOnly,routeByAgent,topology});
+    const stopStream=installSelectedStream(ctx,{codec,store,registry,firstOnly,routeByAgent,topology,reseedAfterCompaction,inheritToChildren,audit});
     const attach=agent=>{
       if (!isEligibleTopLevel(agent) || listeners.has(agent.id)) return;
       let selection,stopAgent,stopRecovery,stopOverflow;

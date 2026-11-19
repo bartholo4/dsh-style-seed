@@ -30,6 +30,9 @@ export const Config = z.object({
   legacySeedPaths: z.array(z.string()).max(16).default([]),
   firstTurnOnly: z.boolean().default(false),
   followSelected: z.boolean().default(true),
+  reseedAfterCompaction: z.boolean().default(true),
+  inheritToChildren: z.boolean().default(false),
+  auditLog: z.boolean().default(false),
   reasoningEffort: z.union(['max']).default('max'),
   maxOutputTokens: z.number().step(1).min(1).default(8192),
 });

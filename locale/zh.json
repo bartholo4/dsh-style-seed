@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "weneed 开关 (dsh-style-seed)",
+    "description": "按会话独立控制的纯历史样例启动开关：不追加风格提示词、不改写系统提示与工具定义，仅在首轮及压缩后首轮临时前置授权样例，可选由已开启的父会话继承给子代理与 Team 成员。",
+    "detail": "README.md"
+  }
+}

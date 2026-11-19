@@ -186,9 +186,11 @@ test('selected-route entry with real AgentLoop and PiAiAdapter, entirely synthet
       async listRecords() { return []; }
     }
     class FakeStorageDomain extends Service {
-      constructor(ctx) { super(ctx, 'storageDomain'); }
-      async open() {
-        const entries = new Map();
+      constructor(ctx) { super(ctx, 'storageDomain'); this.domains = new Map(); }
+      async open(spec) {
+        const keyName = spec?.name ?? 'default';
+        let entries = this.domains.get(keyName);
+        if (!entries) { entries = new Map(); this.domains.set(keyName, entries); }
         return { table: () => ({ get: key => entries.get(key), put: async (key, value) => entries.set(key, value), delete: async key => entries.delete(key) }), close: async () => {} };
       }
     }
@@ -474,6 +476,135 @@ test('selected-route entry with real AgentLoop and PiAiAdapter, entirely synthet
         assert.ok(describeCount >= 2);
         assert.equal(requests.length, start);
       } finally { driftOnSecond = false; }
+    });
+    await t.test('goal first turn and post-compaction first turn project seed while subsequent turns omit it', async () => {
+      const agent = await create('synthetic-goal-compact', routes.a, true), start = requests.length;
+      agent.followup(createUserMessage({ source: { kind: 'goal' }, content: [text('synthetic-goal-task')] }));
+      await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed', JSON.stringify(lastTurn(agent)));
+      assert.equal(requests.length - start, 1);
+      assert.deepEqual(seedCounts(requests.at(-1).body), fullSeed);
+
+      // Second turn before compaction omits seed
+      agent.followup(user([text('synthetic-turn-2')]));
+      await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed');
+      assert.equal(requests.length - start, 2);
+      assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
+
+      // Simulate DSH compaction replacing earlier turns with a compact-checkpoint
+      const seqs = agent.session.snapshotEvents()
+        .filter(event => event.type === 'user/message' || event.type === 'assistant/message')
+        .map(event => event.seq);
+      const startSeq = Math.min(...seqs), endSeq = Math.max(...seqs);
+      const summaryEvent = agent.session.append('compaction/summary', {
+        compactionId: 'cmp-synthetic-1',
+        summary: 'synthetic compacted summary',
+        shadowedRange: { start: startSeq, end: endSeq },
+        shadowedSeqs: seqs,
+        shadowedTokenCount: 100,
+        provider: routes.a.provider,
+        model: routes.a.model,
+      });
+      agent.session.append('user/message', createUserMessage({
+        source: { kind: 'compact-checkpoint', compactionId: 'cmp-synthetic-1' },
+        content: [text('<compacted-summary>synthetic compacted summary</compacted-summary>')],
+      }), { surfaceOp: { op: 'replace', startSeq, endSeq }, sourceEventSeqs: [summaryEvent.seq, ...seqs] });
+
+      // First turn after compaction re-projects seed right before the new task
+      agent.followup(user([text('synthetic-after-compact-1')]));
+      await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed', JSON.stringify(lastTurn(agent)));
+      assert.equal(requests.length - start, 3);
+      const postCompactReq = requests.at(-1).body;
+      assert.deepEqual(seedCounts(postCompactReq), fullSeed);
+      const cpIdx = postCompactReq.messages.findIndex(m => m.role === 'user' && String(m.content).includes('<compacted-summary>'));
+      const seedIdx = postCompactReq.messages.findIndex(m => m.role === 'user' && m.content === 'synthetic-seed-user');
+      const taskIdx = postCompactReq.messages.findIndex(m => m.role === 'user' && m.content === 'synthetic-after-compact-1');
+      assert.ok(cpIdx >= 0 && cpIdx < seedIdx && seedIdx < taskIdx, `expected checkpoint(${cpIdx}) < seed(${seedIdx}) < task(${taskIdx})`);
+
+      // Next turn after post-compaction reply omits seed again
+      agent.followup(user([text('synthetic-after-compact-2')]));
+      await agent.whenIdle();
+      assert.equal(lastTurn(agent)?.kind, 'completed');
+      assert.equal(requests.length - start, 4);
+      assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
+      assert.doesNotMatch(JSON.stringify(agent.session.snapshotEvents()), /synthetic-seed-user|synthetic-seed-reasoning/);
+    });
+    await t.test('child sessions stay unseeded by default and inherit sidecar seed when inheritToChildren is enabled', async () => {
+      const enabledParent = await create('synthetic-parent-on', routes.a, true);
+      enabledParent.followup(user([text('synthetic-parent-turn-1')]));
+      await enabledParent.whenIdle();
+      assert.equal(lastTurn(enabledParent)?.kind, 'completed');
+
+      const offParent = await create('synthetic-parent-off', routes.a, false);
+      offParent.followup(user([text('synthetic-parent-off-turn-1')]));
+      await offParent.whenIdle();
+      assert.equal(lastTurn(offParent)?.kind, 'completed');
+
+      async function createChild(id, parentId, route) {
+        const selection = { current: route, assembled: undefined };
+        const handle = await ctx.agents.create({
+          sessionId: id,
+          meta: { parentSession: parentId, delegationDepth: 1, origin: 'subagent' },
+          agentOptions: route,
+          setup: agentCtx => {
+            installModelSelection(agentCtx, selection);
+          },
+        });
+        handles.push(handle);
+        assert.equal(handle.agent.session.header.parentSession, parentId);
+        assert.equal(handle.agent.session.header.delegationDepth, 1);
+        assert.equal(handle.agent.session.header.origin, 'subagent');
+        return handle.agent;
+      }
+
+      // Default plugin config has inheritToChildren=false: child passes through unseeded
+      const defaultChild = await createChild('synthetic-child-default-off', enabledParent.id, routes.a);
+      const beforeDefaultChild = requests.length;
+      defaultChild.followup(user([text('child-default-q1')]));
+      await defaultChild.whenIdle();
+      assert.equal(lastTurn(defaultChild)?.kind, 'completed');
+      assert.equal(requests.length - beforeDefaultChild, 1);
+      assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
+
+      // Re-mount plugin with inheritToChildren=true while preserving the existing admission store
+      const oldPluginFiber = fibers.pop();
+      await oldPluginFiber.dispose();
+      fibers.push(await ctx.plugin(plugin, { enabled: true, followSelected: true, seedPath, firstTurnOnly: true, inheritToChildren: true }));
+
+      // Child of enabled parent receives seed on Turn 1 and omits seed on Turn 2
+      const inheritedChild = await createChild('synthetic-child-inherited', enabledParent.id, routes.a);
+      const beforeInherited = requests.length;
+      inheritedChild.followup(user([text('child-inherited-q1')]));
+      await inheritedChild.whenIdle();
+      assert.equal(lastTurn(inheritedChild)?.kind, 'completed', JSON.stringify(lastTurn(inheritedChild)));
+      assert.equal(requests.length - beforeInherited, 1);
+      assert.deepEqual(seedCounts(requests.at(-1).body), fullSeed);
+
+      inheritedChild.followup(user([text('child-inherited-q2')]));
+      await inheritedChild.whenIdle();
+      assert.equal(lastTurn(inheritedChild)?.kind, 'completed');
+      assert.equal(requests.length - beforeInherited, 2);
+      assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
+
+      // Child of disabled/off parent passes through unseeded
+      const offParentChild = await createChild('synthetic-child-parent-off', offParent.id, routes.a);
+      const beforeOffParentChild = requests.length;
+      offParentChild.followup(user([text('child-parent-off-q1')]));
+      await offParentChild.whenIdle();
+      assert.equal(lastTurn(offParentChild)?.kind, 'completed');
+      assert.equal(requests.length - beforeOffParentChild, 1);
+      assert.deepEqual(seedCounts(requests.at(-1).body), noSeed);
+
+      // Child of enabled parent routed to unsupported protocol (openai-responses) gracefully skips without failing
+      const unsupportedChild = await createChild('synthetic-child-unsupported', enabledParent.id, routes.c);
+      const beforeUnsupportedChild = requests.length;
+      unsupportedChild.followup(user([text('child-unsupported-q1')]));
+      await unsupportedChild.whenIdle();
+      assert.equal(lastTurn(unsupportedChild)?.kind, 'completed', JSON.stringify(lastTurn(unsupportedChild)));
+      assert.equal(requests.length - beforeUnsupportedChild, 1);
+      assert.equal(requests.at(-1).url, 'https://gamma.synthetic.invalid/v1/responses');
     });
     assert.equal(networkAttempts, 0);
   } finally {

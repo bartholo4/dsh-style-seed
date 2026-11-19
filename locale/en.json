@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "weneed Switch (dsh-style-seed)",
+    "description": "Per-session history-example switch for DeepSeek Harness: adds no style prompt rules and never rewrites system or tool text; projects an authorized example on first turns (and optionally after compaction or to child subagents of enabled sessions).",
+    "detail": "README.en.md"
+  }
+}
